@@ -218,11 +218,48 @@ class ImageProcessor :
 
 #-----------------------------------------------------------------------------#
 
+# Class to handle the representation of a selection rectangle
+class SelectionRectangle :
+
+    def __init__(self, canvas, *args, **kwargs) :
+        self.canvas = canvas
+        self.coords_abs = [] # Absolute (i.e. with respect to canvas NW point)
+        self.coords_rel = [] # Relative (i.e. with respect to image NW point)
+        self.id = -1
+        min_x = 0
+        min_y = 0
+        max_x = 0
+        max_y = 0
+        self.id = canvas.create_line(
+            min_x, max_y, 
+            max_x, max_y,
+            max_x, min_y,
+            min_x, min_y,
+            min_x, max_y,
+            **kwargs)
+
+    def resize(self, coords) :
+        self.coords_abs = coords
+        min_x = self.canvas.canvasx(coords[0])
+        min_y = self.canvas.canvasy(coords[1])
+        max_x = self.canvas.canvasx(coords[2])
+        max_y = self.canvas.canvasy(coords[3])
+        self.coords_rel = [min_x, min_y, max_x, max_y]
+        self.canvas.coords(self.id,
+            min_x, max_y, 
+            max_x, max_y,
+            max_x, min_y,
+            min_x, min_y,
+            min_x, max_y)
+
+    def delete(self) :
+        self.canvas.delete(self.id)
+
+#-----------------------------------------------------------------------------#
+
 class MouseScrollableImageCanvas(tk.Canvas):
     
     def __init__(self, *args, **kwargs):
-
-        # Init
         tk.Canvas.__init__(self, *args, **kwargs)
         self.configure(scrollregion=(0,0,1000,1000))
         self.image = ""
@@ -235,12 +272,22 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.image_aspect_ratio = 0.0
         self.filename = ""
 
+        # Refs to last x,y mouse coordinate after dragging, needed to maintain
+        # the output image in place after processing (i.e. avoiding re-setting
+        # the output view everytime the input is reprocessed and the output
+        # re-drawn)
         self.last_event_x = 0
         self.last_event_y = 0
 
+        # Selection tool
+        self.selection_tool_b = ""
+        self.selection_coords = [0,0,0,0] # x, y min, x, y max
+        self.selection_rectangle = ""
+        
         # Mouse scrolling
-        self.bind("<ButtonPress-1>", self.move_start)
-        self.bind("<B1-Motion>", self.move_move)
+        self.bind("<ButtonPress-1>", self.click)
+        self.bind("<B1-Motion>", self.click_and_drag)
+        self.bind("<ButtonRelease-1>", self.release_click)
         # Linux scroll
         self.bind("<Button-4>", self.zoomerP)
         self.bind("<Button-5>", self.zoomerM)
@@ -248,13 +295,56 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.bind("<MouseWheel>",self.zoomer)
 
     # Scrolling
-    def move_start(self, event):
+    def click(self, event):
+        if self.selection_tool_b != "" : # If button is linked
+            if self.selection_tool_b.toggled : # If button is on
+                if self.selection_rectangle != "" : # If a selection exists
+                    self.delete_selection()
+                    self.selection_coords = [0,0,0,0]
+                self.selection_coords[0] = event.x
+                self.selection_coords[1] = event.y
+                self.selection_rectangle = SelectionRectangle(self)
+                return
+            else :
+                self.selection_coords = [0,0,0,0]
         self.scan_mark(event.x, event.y)
-    def move_move(self, event):
+
+    def click_and_drag(self, event):
+        if self.selection_tool_b != "" :
+            if self.selection_tool_b.toggled :
+                min_x = min(self.selection_coords[0], event.x)
+                min_y = min(self.selection_coords[1], event.y)
+                max_x = max(self.selection_coords[0], event.x)
+                max_y = max(self.selection_coords[1], event.y)
+                self.selection_rectangle.resize([min_x, min_y, max_x, max_y])
+                self.selection_coords[2] = event.x
+                self.selection_coords[3] = event.y
+                return
+            else :
+                self.selection_coords = [0,0,0,0]
         self.last_event_x = event.x
         self.last_event_y = event.y
         self.scan_dragto(event.x, event.y, gain=1)
 
+    def release_click(self, event) :
+        if self.selection_tool_b != "" :
+            if self.selection_tool_b.toggled :
+                if (self.selection_coords[2] < self.selection_coords[0]) :
+                    tmp = self.selection_coords[2]
+                    self.selection_coords[2] = self.selection_coords[0]
+                    self.selection_coords[0] = tmp
+                if (self.selection_coords[3] < self.selection_coords[1]) :
+                    tmp = self.selection_coords[3]
+                    self.selection_coords[3] = self.selection_coords[1]
+                    self.selection_coords[1] = tmp
+                print(self.selection_coords)
+
+    def delete_selection(self) :
+        if self.selection_rectangle != "" :
+            self.selection_rectangle.delete()
+            self.selection_rectangle = ""
+        self.selection_coords = [0,0,0,0]
+                
     # Windows zoom
     def zoomer(self, event):
         if (event.delta > 0):
@@ -263,20 +353,22 @@ class MouseScrollableImageCanvas(tk.Canvas):
         elif (event.delta < 0):
             self.image_scale /= self.image_zoom_factor
             #self.scale("all", event.x, event.y, 0.9, 0.9)
-        self.zoom_image()
+        self.zoom_image(event.x, event.y)
 
     # Linux zoom
     def zoomerP(self, event):
         self.image_scale *= self.image_zoom_factor
-        self.zoom_image()
+        self.zoom_image(event.x, event.y)
         #self.scale("all", event.x, event.y, 1.1, 1.1)
     def zoomerM(self, event):
         self.image_scale /= self.image_zoom_factor
-        self.zoom_image()
+        self.zoom_image(event.x, event.y)
         #self.scale("all", event.x, event.y, 0.9, 0.9)
 
     # Actually zoom the picture
-    def zoom_image(self) :
+    def zoom_image(self, x, y) :
+        if self.image_no_zoom_PIL == "" :
+            return
         iw = int(self.image_no_zoom_PIL.width*self.image_scale)
         ih = int(self.image_no_zoom_PIL.height*self.image_scale)
         size = (iw, ih)
@@ -284,7 +376,14 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.image = ImageTk.PhotoImage(i1)
         self.configure(scrollregion=(0, 0, self.image.width(), 
             self.image.height()))
+        self.delete_selection()
         self.draw_image()
+        '''
+        ids = [i for i in self.find_all() if i != self.image_id]
+        print(ids, self.image_scale)
+        self.scale(ids, x, y, 
+            self.image_scale, self.image_scale)
+        '''
 
     # Set image from provided PIL image but do not draw
     def set_image(self, im) :
@@ -316,7 +415,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
     # Set passed image but zoom it to the level of the pre-existing image
     def set_zoom_draw_image(self, im):
         self.set_image(im)
-        self.zoom_image()
+        self.zoom_image(self.last_event_x, self.last_event_y)
         self.draw_image()
 
     # Set and draw passed image
@@ -377,11 +476,30 @@ class IntEntry(tk.Entry) :
 
 #-----------------------------------------------------------------------------#
 
+class ToggleButton(tk.Button) :
+
+    def __init__(self, *args, **kwargs) :
+        tk.Button.__init__(self, *args, **kwargs, relief="raised", 
+            command=self.on_toggle_change)
+        self.toggled = False
+
+    def on_toggle_change(self, *args) :
+        self.toggled = not self.toggled
+        if self.toggled :
+            self.config(relief="sunken")
+        else :
+            self.config(relief="raised")
+
+#-----------------------------------------------------------------------------#
+
+# Classes for handling the log redirection
 class IODirector(object):
+
     def __init__(self, log_t):
         self.log_t = log_t
 
 class StdoutDirector(IODirector):
+
     def write(self, msg):
         self.log_t.update_idletasks()
         self.log_t.insert(tk.END, msg)
@@ -438,15 +556,28 @@ class Application(tk.Tk) :
             padx=(pad0/2, pad0), pady=(pad0, pad0/2))
         self.frames.append(self.frame2)
 
-        # Image loading
-        load_image_b = tk.Button(self.frame2, 
-            text="Load image", command=self.load_image)
-        load_image_b.grid(row=0, column=0, sticky=tk.W+tk.E, 
+        # Input options ------------------------------------------------------#
+        self.in_opt = tk.LabelFrame(self.frame2, text="Input options")
+        self.in_opt.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
             padx=pad1, pady=(pad1, pad1/2))
+
+        # Image loading
+        self.load_image_b = tk.Button(self.in_opt, 
+            text="Load image", command=self.load_image)
+        self.load_image_b.grid(row=0, column=0, sticky=tk.W+tk.E, 
+            padx=(pad1, pad1/2), pady=(pad1, pad1/2))
+
+        # Selection tool
+        self.selection_tool_b = ToggleButton(self.in_opt,
+            text="Selection tool")
+        self.selection_tool_b.config(command=self.toggle_selection_tool)
+        self.selection_tool_b.grid(row=0, column=1, sticky=tk.W+tk.E,
+            padx=(pad1/2, pad1), pady=(pad1, pad1/2))
+        self.input_canvas.selection_tool_b = self.selection_tool_b
         
         # Processor options --------------------------------------------------#
         self.proc_opt = tk.LabelFrame(self.frame2, text="Processor options")
-        self.proc_opt.grid(row=1, column=0, sticky=tk.W+tk.E, 
+        self.proc_opt.grid(row=1, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
             padx=pad1, pady=(pad1/2, pad1/2))
         
         # Number of colors
@@ -536,7 +667,7 @@ class Application(tk.Tk) :
 
         # Save options -------------------------------------------------------#
         self.save_opt = tk.LabelFrame(self.frame2, text="Save options")
-        self.save_opt.grid(row=2, column=0, sticky=tk.W+tk.E, 
+        self.save_opt.grid(row=2, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
             padx=pad1, pady=(pad1/2, pad1))
 
         # Pixel size
@@ -609,6 +740,11 @@ class Application(tk.Tk) :
         # Start with locked aspect ratio after loading
         self.aspect_ratio_b_status = 1
         self.aspect_ratio_b.config(image=self.aspect_ratio_i_lock)
+
+    def toggle_selection_tool(self) :
+        self.selection_tool_b.on_toggle_change()
+        if not self.selection_tool_b.toggled :
+            self.input_canvas.delete_selection()
 
     def save_image(self) :
         # If an output exists
