@@ -15,126 +15,296 @@
 ##                                                             Stefan Radman ##
 ###############################################################################
 '''
-
+###############################################################################
 ### IMPORTS ###################################################################
+###############################################################################
 
+import os
 import sys
 import time
 import math
 import random
 import logging
 import numpy as np
+import pandas as pd
 import tkinter as tk
+from enum import Enum
+from tkinter import ttk
 from PIL import Image, ImageOps, ImageTk
 from tkinter.filedialog import askopenfile, asksaveasfile
 
+###############################################################################
+### DICTIONARIES ##############################################################
+###############################################################################
+
+interpolation_modes = {"Bilinear" : Image.BILINEAR, "Bicubic" : Image.BICUBIC,
+    "Nearest" : Image.NEAREST, "Lanczos" : Image.LANCZOS}
+
+anchor_points = {"Center" : "c", "Top" : "n", "Top-left" : "ne", "Left" : "e", 
+    "Bottom-left" : "se", "Bottom" : "s", "Bottom-right" : "sw",
+    "Right" : "w", "Top-right" : "nw"}
+
+###############################################################################
 ### FUNCTIONS #################################################################
+###############################################################################
 
-# Setting weights to 1 for a col and/or row makes it stretchable
-def config_rows_cols(obj) :
-    col_count, row_count = obj.grid_size()
-    for col in range(col_count):
-        root.grid_columnconfigure(col, weight=1)
-    for row in range(row_count):
-        obj.grid_rowconfigure(row, weight=1)
+# Add to dict under dict_key from kwargs[kwargs_key], if it exists
+def add_from_kwargs(dict, dict_key, kwargs_key, kwargs) :
 
+    if kwargs_key in kwargs :
+        dict[dict_key] = kwargs[kwargs_key]
+
+# Make grid stretchable
+def stretch_grid(obj, **kwargs) :
+        except_rows = kwargs.get("exceptrows", [])
+        except_columns = kwargs.get("exceptcolumns", [])
+        min_row_size = kwargs.get("minrowsize", 0)
+        min_column_size = kwargs.get("mincolumnsize", 0)
+        col_count, row_count = obj.grid_size()
+        for col in range(col_count):
+            w = 1
+            if col in except_columns :
+                w = 0
+            obj.grid_columnconfigure(col, weight=w, minsize=min_column_size)
+        for row in range(row_count):
+            w = 1
+            if row in except_rows :
+                w = 0
+            obj.grid_rowconfigure(row, weight=w, minsize=min_row_size)
+
+###############################################################################
 ### Classes ###################################################################
+###############################################################################
+
+# Classes for handling the log redirection
+class IODirector(object):
+
+    def __init__(self, log_t):
+        self.log_t = log_t
+
+class StdoutDirector(IODirector):
+
+    def write(self, msg):
+        self.log_t.update_idletasks()
+        self.log_t.insert(tk.END, msg)
+        self.log_t.yview(tk.END)
+
+    def flush(self):
+        pass
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+
+class Padding :
+
+    def __init__(self, pad_x, pad_y, ratio=2) :
+        self.pad_x = pad_x
+        self.pad_y = pad_y
+        self.ratio = ratio
+
+    def get(self, dirc, padmode="xy", invert=False) :
+        pads = {}
+        r = self.ratio
+        if padmode == "xx" :
+            x = self.pad_x
+            y = self.pad_x
+        elif padmode == "xy" :
+            x = self.pad_x
+            y = self.pad_y
+        elif padmode == "yx" :
+            x = self.pad_y
+            y = self.pad_x
+        elif padmode == "yy" :
+            x = self.pad_y
+            y = self.pad_y
+
+        # Mnemonic:
+        #(W, E)
+        #(N, S)
+        if not invert :
+            if dirc == "c" :
+                pads["padx"] = (x/r, x/r)
+                pads["pady"] = (y/r, y/r)
+            elif dirc == "n" :
+                pads["padx"] = (x/r, x/r)
+                pads["pady"] = (y, y/r)
+            elif dirc == "ne" :
+                pads["padx"] = (x/r, x)
+                pads["pady"] = (y, y/r)
+            elif dirc == "e" :
+                pads["padx"] = (x/r, x)
+                pads["pady"] = (y/r, y/r)
+            elif dirc == "se" :
+                pads["padx"] = (x/r, x)
+                pads["pady"] = (y/r, y)
+            elif dirc == "s" :
+                pads["padx"] = (x/r, x/r)
+                pads["pady"] = (y/r, y)
+            elif dirc == "sw" :
+                pads["padx"] = (x, x/r)
+                pads["pady"] = (y/r, y)
+            elif dirc == "w" :
+                pads["padx"] = (x, x/r)
+                pads["pady"] = (y/r, y/r)
+            elif dirc == "nw" :
+                pads["padx"] = (x, x/r)
+                pads["pady"] = (y, y/r)
+            elif dirc == "ns" :
+                pads["padx"] = (x/r, x/r)
+                pads["pady"] = (y, y)
+            elif dirc == "ew" :
+                pads["padx"] = (x, x)
+                pads["pady"] = (y/r, y/r)
+        else :
+            if dirc == "c" :
+                pads["padx"] = (x, x)
+                pads["pady"] = (y, y)
+            elif dirc == "n" :
+                pads["padx"] = (x, x)
+                pads["pady"] = (y/r, y)
+            elif dirc == "ne" :
+                pads["padx"] = (x, x/r)
+                pads["pady"] = (y/r, y)
+            elif dirc == "e" :
+                pads["padx"] = (x, x/r)
+                pads["pady"] = (y, y)
+            elif dirc == "se" :
+                pads["padx"] = (x, x/r)
+                pads["pady"] = (y, y/r)
+            elif dirc == "s" :
+                pads["padx"] = (x, x)
+                pads["pady"] = (y, y/r)
+            elif dirc == "sw" :
+                pads["padx"] = (x/r, x)
+                pads["pady"] = (y, y/r)
+            elif dirc == "w" :
+                pads["padx"] = (x/r, x)
+                pads["pady"] = (y, y)
+            elif dirc == "nw" :
+                pads["padx"] = (x/r, x)
+                pads["pady"] = (y/r, y)
+            elif dirc == "ns" :
+                pads["padx"] = (x, x)
+                pads["pady"] = (y/r, y/r)
+            elif dirc == "ew" :
+                pads["padx"] = (x/r, x/r)
+                pads["pady"] = (y, y)
+        return pads
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
 
 # k-means algorithm that takes advantage of numpy. Operates on np.arrays
 class KMeans :
 
-    # Items is 2D np array
-    def __init__(self, Items, k, fidelity, print_=False) :
-        self.Items = Items
-        self.n = Items.shape[0]
-        self.d = Items.shape[1]
-        self.k = k
-        self.meanItems = np.empty((0, self.d))
+    def __init__(self, **kwargs) :
+        
+        #self.data = kwargs["data"]
+
+        self.data, self.data_freq = np.unique(kwargs["data"], axis=0, 
+            return_counts=True) 
+        
+        self.n = self.data.shape[0]
+        self.d = self.data.shape[1]
+        self.k = kwargs["k"]
+        
+        self.means = np.empty((0, self.d))
         self.clusters = []
-
-        # Set iteration parameters from fidelity (this is all harcoded based
-        # on what I saw works best, on average, according to my expectations)
-        self.max_outer_iter = int(fidelity*2)
-        self.min_rel_cluster_size = (fidelity*1.5)*0.02
-        self.inner_iter_abs_tol = (1.0/5.0)**(fidelity-1)
+        self.weights = []
         
-        self.print_ = print_
-        self.findClusters()
+        self.max_iters = kwargs.get("maxiters", 100)
+        self.min_rel_epsilon = (1.0/3.0)**(kwargs.get("fidelity", 10)-1)
         
-    def findClusters(self) :
+        self.print_info = kwargs.get("printinfo", False)
+        
+        self.run()
+        
+    def run(self) :
+        # Do nothing if data smaller than k
         if self.n <= self.k :
-            self.meanItems = self.Items
-        outer_flag = True
-        outer_iter = 0
-        while (outer_flag and outer_iter < self.max_outer_iter) :
+            self.means = self.data
+            self.correct_means()
+            return
 
-            # Init random clusters
-            meanItems = np.empty_like(self.meanItems)
-            clusters = []
-            while meanItems.shape[0] < self.k :
-                item = self.Items[random.randint(0, self.n-1)]
-                if item not in meanItems :
-                    meanItems = np.append(meanItems,
-                        item.reshape((1, self.d)), axis=0)
-                    clusters.append([item])
-            for item in self.Items :
-                dists = np.sum(np.square(item-meanItems), axis=1)
-                mini = np.argmin(dists, axis=0)
-                minDist = dists[mini]
-                if minDist > 1e-69 :
-                    clusters[mini].append(item)
+        if self.print_info :
+            print("Running k-means with target residual:", 
+                self.min_rel_epsilon)
 
-            # Iteratively refine clusters
-            inner_flag = True
-            inner_iter = 0
-            rms_0 = 0
-            residual = 1
-            while inner_flag :
-                rms = 0
-                for i, cluster in enumerate(clusters) :
-                    meanItem = np.sum(cluster, axis=0)/max(
-                            len(cluster),1)
-                    rms += np.sum(np.square(meanItem - meanItems[i]), axis=0)
-                    meanItems[i] = meanItem
-                clusters = []
-                for i in range(self.k) :
-                    clusters.append([])
-                for item in self.Items :
-                    dists = np.sum(np.square(item-meanItems), axis=1)
-                    mini = np.argmin(dists, axis=0)
-                    minDist = dists[mini]
-                    if minDist > 1e-69 :
-                        clusters[mini].append(item)
-                if (inner_iter > 0) :
-                    residual = rms/rms_0
-                else :
-                    rms_0 = rms
-                if self.print_ :
-                    print("Processor status:", 
-                        (outer_iter+1), "/", (inner_iter+1), "/", 
-                        '{:.3E}'.format(residual), "/", 
-                        self.min_rel_cluster_size)
-                inner_flag = (residual > self.inner_iter_abs_tol)
-                inner_iter += 1
+        # Initialize means randomly
+        while self.means.shape[0] < self.k :
+            self.means = np.vstack([self.means, self.sample_from_data()])
 
-            # Compute cluster sizes, if there are clusters that are too 
-            # small (i.e. less a certain fraction of the expected average 
-            # cluster size), start over
-            sizes = []
-            for cluster in clusters :
-                sizes.append(len(cluster))
-            minSize = self.min_rel_cluster_size*self.Items.shape[0]/self.k
-            if min(sizes) <= minSize :
-                outer_flag = True
+        # Run the k-means iterations
+        i = 0
+        not_converged = True
+        rel_epsilon = 1.0
+        start_epsilon = 0.0
+        while (i < self.max_iters and not_converged) :
+            epsilon = self.run_one_iteration()
+            if i == 0 :
+                start_epsilon = epsilon
             else :
-                outer_flag = False
-            
-            #
-            outer_iter += 1
-        
-        self.clusters = clusters
-        self.meanItems = np.rint(meanItems)
+                rel_epsilon = epsilon/start_epsilon
+            if rel_epsilon <= self.min_rel_epsilon :
+                not_converged = False
+            i+=1
 
+        self.correct_means()
+
+        if self.print_info :
+            print("Final k-means performance (iters/res):", i,
+                '{:.3E}'.format(rel_epsilon))
+
+    def run_one_iteration(self) :
+        # This bit of code produces an array dists of shape
+        # (data.shape[0], means.shape[1]). Each row contains the
+        # distances of the corresponding data point to each point
+        # in means. So dists[i][j] is the average distance of data[i]
+        # form means[j]
+        dists = np.zeros((self.n, 0))
+        for i, mean in enumerate(self.means) :
+            dists = np.insert(
+                dists, i, np.linalg.norm((mean-self.data), axis=1), axis=1)
+
+        # Assign points in data to the closest cluster corresponding to 
+        # each mean
+        argmin_dists = np.argmin(dists, axis=1)
+        self.clusters = [[] for i in range(self.k)]
+        self.weights = [[] for i in range(self.k)]
+        for i, mean in enumerate(self.means) :
+            indices = np.where(argmin_dists == i)[0]
+            self.clusters[i] = self.data[indices]
+            self.weights[i] = self.data_freq[indices]
+        
+        # Update means
+        epsilon = 0
+        for i, cluster in enumerate(self.clusters) :
+            if cluster.shape[0] > 0 :
+                new_mean = np.average(cluster, 
+                    axis=0, weights=np.asarray(self.weights[i]))
+            else :
+                new_mean = self.sample_from_data()
+            epsilon += np.linalg.norm(new_mean-self.means[i])
+            self.means[i] = new_mean
+
+        return epsilon
+
+    def correct_means(self) :
+        # Force size of k (maybe unnecessary?)
+        self.means = np.unique(np.rint(self.means), axis=0)
+        while self.means.shape[0] < self.k :
+            self.means = np.vstack([self.means, self.means[-1]])
+
+    def sample_from_data(self) :
+        while True :
+            new_mean = self.data[np.random.randint(0, self.n-1)]
+            if new_mean not in self.means :
+                return new_mean
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
 class ImageProcessor :
@@ -142,20 +312,69 @@ class ImageProcessor :
     def __init__(self, input_canvas, output_canvas) :
         self.input_canvas = input_canvas
         self.output_canvas = output_canvas
-        self.palette = []
         self.max_pixels = 48*48
-        self.n_colors = 0
-        self.bits_R = 0
-        self.bits_G = 0
-        self.bits_B = 0
-        self.fidelity = 0
-        self.out_res_x = 0
-        self.out_res_y = 0
+        self.default_mode_name = "Default"
+        self.tiled_mode_name = "Tiled"
+        self.GBC_mode_name = "Game Boy Color"
+        self.modes = [self.default_mode_name, self.tiled_mode_name, 
+            self.GBC_mode_name]
+    
+    def best_palette_avg_norm(self, data, palettes) :
+        if palettes.shape[0] > 1 :
+            palettes_reshaped = palettes.reshape(
+                palettes.shape[0]*palettes.shape[1], palettes.shape[2])
+            palettes_sum_norm = np.zeros(palettes.shape[0])
+            for i, palette_color in enumerate(palettes_reshaped) :
+                palettes_sum_norm[int(np.floor(i/palettes.shape[1]))] += \
+                    np.sum(np.linalg.norm(data-palette_color, axis=1), axis=0)
+            return palettes[np.argmin(palettes_sum_norm)]
+        return palettes[0]
 
-    def crop(self, im) :
+    def best_palette_min_norm(data, palettes) :
+        if palettes.shape[0] > 1 :
+            palettes_reshaped = palettes.reshape(
+                palettes.shape[0]*palettes.shape[1], palettes.shape[2])
+            palettes_sum_norm = np.ones(palettes.shape[0])*1e12
+            for i, palette_color in enumerate(palettes_reshaped) :
+                I = int(np.floor(i/palettes.shape[1]))
+                palettes_sum_norm[I] = min(np.sum(np.linalg.norm(
+                    data-palette_color, axis=1), axis=0), palettes_sum_norm[I])
+            return palettes[np.argmin(palettes_sum_norm)]
+        return palettes[0]
+
+    def replace_from_palette(self, data, palette) :
+        # First, construct argmin_dists which is a 1-D array of size 
+        #data.shape[0] wherein each element consists of the index of the 
+        # corresponding palette color that best approximates the corresponding
+        # element in data
+        dists = np.zeros((data.shape[0], 0))
+        for i, palette_color in enumerate(palette) :
+            d = np.linalg.norm((palette_color-data), axis=1)
+            dists = np.insert(dists, i, d, axis=1)
+        argmin_dists = np.argmin(dists, axis=1)
+        # Now, do the actual substitution in data. Would be great if I could
+        # rid of the second for, but oh, for now it's fine
+        for i, palette_color in enumerate(palette) :
+            indices = np.where(argmin_dists == i)[0]*palette_color.shape[0]
+            for j in range(palette_color.shape[0]) :
+                data.put((indices+j), palette_color[j])
+        return data
+
+    def convert_color_bits(self, array, rgb_bits, unique=False) :
+        if rgb_bits == [16, 16, 16] :
+            return array
+        scale_8_bit = np.array([float(2**(rgb_bits[0]-1))/255.0, 
+            float(2**(rgb_bits[1]-1))/255.0, float(2**(rgb_bits[2]-1))/255.0])
+        if unique :
+            return np.unique(np.rint(np.divide(np.rint(np.multiply(
+                array, scale_8_bit)), scale_8_bit)), axis=0)
+        return np.rint(np.divide(np.rint(np.multiply(
+                array, scale_8_bit)), scale_8_bit))
+
+    def crop(self, im, target_aspect_ratio) :
         width, height = im.size
         aspect_ratio = width/height
-        target_aspect_ratio = self.out_res_x/self.out_res_y
+        target_aspect_ratio
         if abs((target_aspect_ratio-aspect_ratio)/target_aspect_ratio) > 0.01 :
             if aspect_ratio > target_aspect_ratio :
                 target_width = height*target_aspect_ratio
@@ -168,68 +387,163 @@ class ImageProcessor :
             im = im.crop(border)
         return im.convert("RGB")
 
-    def process_image(self) :
-        # Load image as copy and resize to operate the kMeans on at most
+    def process_default(self, **kwargs) :
+        palette_size = kwargs["palettesize"]
+        rgb_bits = kwargs["rgbbits"]
+        fidelity = kwargs["fidelity"]
+        out_x = kwargs["outx"]
+        out_y = kwargs["outy"]
+        aspect_ratio = out_x/out_y
+        
+        # Get or default
+        max_pixels = kwargs.get("maxpixels", self.max_pixels)
+
+        # Load image as copy and resize to operate the k-means on at most
         # self.max_pixels pixels (because it's time consuming), shape them into
         # a 1D array and operate k-means on them to find clusters of size 
         # n_colors
-        input_image = self.input_canvas.image_no_zoom_PIL_RGB.copy()
-        width, height = input_image.size
-        n_pixels = width*height
-        scale = math.sqrt(self.max_pixels/n_pixels)
-        input_image = self.crop(input_image) # Crop according to out asp. ratio
-        if scale < 1.0 :
-            input_image = input_image.resize((int(width*scale), 
-                int(height*scale)))
-        data = np.array(input_image)
+        kmeans_image = self.input_canvas.image_no_zoom_PIL_RGB.copy()
+        n_pixels = out_x*out_y
+        scale = math.sqrt(max_pixels/n_pixels)
+        kmeans_image = self.crop(kmeans_image, aspect_ratio)
+        kmeans_image = kmeans_image.resize((int(out_x*min(scale, 1.0)), 
+            int(out_y*min(1.0, scale))), resample=Image.NEAREST)
+        data = np.array(kmeans_image)
         data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
-        abs_tol = (1.0/5.0)**(self.fidelity)
-        k_means = KMeans(data, self.n_colors, self.fidelity, True)
+        k_means = KMeans(data=data, k=palette_size, fidelity=fidelity, 
+            printinfo=True)
 
         # Prepare output image (cropping and such)
-        start_time = time.time()
         output_image = self.input_canvas.image_no_zoom_PIL_RGB.copy()
-        output_image = self.crop(output_image)
-        output_image = output_image.resize((self.out_res_x, self.out_res_y))
+        output_image = self.crop(output_image, aspect_ratio)
+        output_image = output_image.resize((out_x, out_y))
 
         # Convert color palette into 8 bit
-        scale_8_bit = np.array([float(2**(self.bits_R-1))/255.0, 
-            float(2**(self.bits_G-1))/255.0, float(2**(self.bits_B-1))/255.0])
-        k_means.meanItems = np.rint(
-            np.divide(
-                np.rint(np.multiply(k_means.meanItems, scale_8_bit)), 
-                scale_8_bit))
+        k_means.means = self.convert_color_bits(k_means.means, 
+            rgb_bits)
 
         # Replace colors in output with colors in palette
         data = np.array(output_image)
         orig_shape = data.shape
         data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
-        for i, item in enumerate(data) :
-            dists = np.sum(np.square(item-k_means.meanItems), axis=1)
-            mini = np.argmin(dists, axis=0)
-            minDist = dists[mini]
-            if minDist > 1e-69 :
-                data[i] = k_means.meanItems[mini]
+        self.replace_from_palette(data, k_means.means)
         data = data.reshape(orig_shape)
-
+        
         # Reassamble data into image, set and draw image to output canvas
         output_image = Image.fromarray(data)
         self.output_canvas.set_zoom_draw_image(output_image)
 
+    def process_tiled(self, **kwargs) :
+        n_palettes = kwargs["npalettes"]
+        palette_size = kwargs["palettesize"]
+        rgb_bits = kwargs["rgbbits"]
+        fidelity = kwargs["fidelity"]
+        t_x = kwargs["tilesize"][0]
+        t_y = kwargs["tilesize"][1]
+        out_t_x = kwargs["outx"]
+        out_t_y = kwargs["outy"]
+        out_x = int(out_t_x*t_x)
+        out_y = int(out_t_y*t_y)
+        aspect_ratio = out_x/out_y
+        # Get or default
+        max_pixels = kwargs.get("maxpixels", self.max_pixels)
+
+        input_image = self.input_canvas.image_no_zoom_PIL_RGB.copy()
+        input_image = self.crop(input_image, aspect_ratio)
+        output_image = input_image.copy()
+        output_image = output_image.resize((out_x, out_y))
+        output_data = np.array(output_image)
+        n_pixels = out_x*out_y
+        scale = math.sqrt(max_pixels*n_palettes/n_pixels)
+        input_image = input_image.resize((int(out_x*min(scale, 1.0)), 
+            int(out_y*min(1.0, scale))), resample=Image.LANCZOS)
+        data = np.array(input_image)
+        data = data.reshape(data.shape[0]*data.shape[1], 
+            data.shape[2])
+
+        # Determine palettes
+        palettes = []
+        start_time = time.time()
+        delta = np.floor(data.shape[0]/n_palettes)
+        for i in range(n_palettes) :
+            cut_data = None
+            s = int(i*delta)
+            if i != n_palettes-1 :
+                e = int((i+1)*delta)
+                cut_data = data[s:e]
+            else :
+                e = int((i)*delta)
+                cut_data = data[e:]
+            k_means = KMeans(data=cut_data, k=palette_size, fidelity=fidelity)
+            k_means.means = self.convert_color_bits(k_means.means,
+                rgb_bits)
+            palettes.append(k_means.means)
+        palettes = np.asarray(palettes)
+        print("Dt k-means =", (time.time()-start_time))
+        
+        # Determine best palette for each tile. This is done or downsampled
+        # tiles of 8x8 to improve performance
+        best_palettes = []
+        max_tile_pixels = 8*8
+        start_time = time.time()
+        for j in range(out_t_y) :
+            for i in range(out_t_x) :
+                I = i*t_x
+                J = j*t_y
+                box = (i*t_x, j*t_y, (i+1)*t_x, (j+1)*t_y)
+                tile = output_image.crop(box)
+                proc_tile = tile.copy()
+                n_pixels = tile.width*tile.height
+                if (n_pixels > max_tile_pixels) :
+                    scale = np.sqrt(max_tile_pixels/n_pixels)
+                    proc_tile = proc_tile.resize((int(tile.width*scale), 
+                        int(tile.height*scale)), resample=Image.NEAREST)
+                data = np.array(proc_tile)
+                data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
+                best_palette = self.best_palette_avg_norm(data, palettes)
+                data = np.array(tile)
+                data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
+                for q, item in enumerate(data) :
+                    dists = np.linalg.norm((item-best_palette), axis=1)
+                    mini = np.argmin(dists, axis=0)
+                    output_data[int(J+np.floor(q/t_x))][int(I+q%t_x)] = \
+                        best_palette[mini]
+        print("Dt substitution =", (time.time()-start_time))
+        
+        output_image = Image.fromarray(output_data)
+        self.output_canvas.set_zoom_draw_image(output_image)
+
+    def process(self, **kwargs) :
+
+        mode = kwargs.get("mode", self.default_mode_name)
+        if mode == self.default_mode_name :
+            self.process_default(**kwargs)
+        elif mode == self.tiled_mode_name or mode == self.GBC_mode_name:
+            self.process_tiled(**kwargs)
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
 # Class to handle the representation of a selection rectangle
 class SelectionRectangle :
 
     def __init__(self, canvas, *args, **kwargs) :
-        self.canvas = canvas
+        self.canvas = canvas # Top level canvas on which selection lives
         self.coords_abs = [] # Absolute (i.e. with respect to canvas NW point)
         self.coords_rel = [] # Relative (i.e. with respect to image NW point)
+        self.coords_rel_scaled = []
         self.id = -1
         min_x = 0
         min_y = 0
-        max_x = 0
-        max_y = 0
+        if "event" in kwargs :
+            event = kwargs.pop("event")
+            min_x = event.x
+            min_y = event.y
+        max_x = min_x
+        max_y = min_y
+        self.x0 = min_x
+        self.y0 = min_y
         self.id = canvas.create_line(
             min_x, max_y, 
             max_x, max_y,
@@ -237,14 +551,35 @@ class SelectionRectangle :
             min_x, min_y,
             min_x, max_y,
             **kwargs)
-
-    def resize(self, coords) :
-        self.coords_abs = coords
-        min_x = self.canvas.canvasx(coords[0])
-        min_y = self.canvas.canvasy(coords[1])
-        max_x = self.canvas.canvasx(coords[2])
-        max_y = self.canvas.canvasy(coords[3])
+        self.coords_abs = [min_x, min_y, max_x, max_y]
+        min_x = self.canvas.canvasx(min_x)
+        min_y = self.canvas.canvasy(min_y)
+        max_x = self.canvas.canvasx(max_x)
+        max_y = self.canvas.canvasy(max_y)
         self.coords_rel = [min_x, min_y, max_x, max_y]
+
+    def delete(self) :
+        self.canvas.delete(self.id)
+
+    def resize(self, event) :
+        min_x = min(self.x0, event.x)
+        min_y = min(self.y0, event.y)
+        max_x = max(self.x0, event.x)
+        max_y = max(self.y0, event.y)
+        min_x = max(min_x, 0)
+        min_y = max(min_y, 0)
+        max_x = min(max_x, self.canvas.winfo_width())
+        max_y = min(max_y, self.canvas.winfo_height())
+        self.coords_abs = [min_x, min_y, max_x, max_y]
+        min_x = self.canvas.canvasx(min_x)
+        min_y = self.canvas.canvasy(min_y)
+        max_x = self.canvas.canvasx(max_x)
+        max_y = self.canvas.canvasy(max_y)
+        self.coords_rel = [min_x, min_y, max_x, max_y]
+        self.coords_rel_scaled = [int(min_x/self.canvas.image_scale), 
+            int(min_y/self.canvas.image_scale), 
+            int(max_x/self.canvas.image_scale), 
+            int(max_y/self.canvas.image_scale)]
         self.canvas.coords(self.id,
             min_x, max_y, 
             max_x, max_y,
@@ -252,9 +587,8 @@ class SelectionRectangle :
             min_x, min_y,
             min_x, max_y)
 
-    def delete(self) :
-        self.canvas.delete(self.id)
-
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
 class MouseScrollableImageCanvas(tk.Canvas):
@@ -262,15 +596,18 @@ class MouseScrollableImageCanvas(tk.Canvas):
     def __init__(self, *args, **kwargs):
         tk.Canvas.__init__(self, *args, **kwargs)
         self.configure(scrollregion=(0,0,1000,1000))
-        self.image = ""
-        self.image_no_zoom = ""
-        self.image_no_zoom_PIL = ""
-        self.image_no_zoom_PIL_RGB = ""
-        self.image_id = -1
+        self.image = None
+        self.image_no_zoom = None
+        self.image_no_zoom_PIL = None
+        self.image_no_zoom_PIL_RGB = None
+        self.image_id = None
+        self.undo_buffer = None
+        self.filepath = None
+        self.filename = None
+        
         self.image_scale = 1.0
         self.image_zoom_factor = 1.25
-        self.image_aspect_ratio = 0.0
-        self.filename = ""
+        self.aspect_ratio = 0.0
 
         # Refs to last x,y mouse coordinate after dragging, needed to maintain
         # the output image in place after processing (i.e. avoiding re-setting
@@ -280,9 +617,8 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.last_event_y = 0
 
         # Selection tool
-        self.selection_tool_b = ""
-        self.selection_coords = [0,0,0,0] # x, y min, x, y max
-        self.selection_rectangle = ""
+        self.selection_tool_b = None
+        self.selection_rectangle = None
         
         # Mouse scrolling
         self.bind("<ButtonPress-1>", self.click)
@@ -296,54 +632,34 @@ class MouseScrollableImageCanvas(tk.Canvas):
 
     # Scrolling
     def click(self, event):
-        if self.selection_tool_b != "" : # If button is linked
+        if self.selection_tool_b : # If button is linked
             if self.selection_tool_b.toggled : # If button is on
-                if self.selection_rectangle != "" : # If a selection exists
-                    self.delete_selection()
-                    self.selection_coords = [0,0,0,0]
-                self.selection_coords[0] = event.x
-                self.selection_coords[1] = event.y
-                self.selection_rectangle = SelectionRectangle(self)
+                if self.selection_rectangle : # If a selection exists
+                    self.selection_rectangle.delete()
+                self.selection_rectangle = SelectionRectangle(self, 
+                    event=event)
                 return
-            else :
-                self.selection_coords = [0,0,0,0]
         self.scan_mark(event.x, event.y)
 
     def click_and_drag(self, event):
-        if self.selection_tool_b != "" :
+        if self.selection_tool_b :
             if self.selection_tool_b.toggled :
-                min_x = min(self.selection_coords[0], event.x)
-                min_y = min(self.selection_coords[1], event.y)
-                max_x = max(self.selection_coords[0], event.x)
-                max_y = max(self.selection_coords[1], event.y)
-                self.selection_rectangle.resize([min_x, min_y, max_x, max_y])
-                self.selection_coords[2] = event.x
-                self.selection_coords[3] = event.y
+                self.selection_rectangle.resize(event)
                 return
-            else :
-                self.selection_coords = [0,0,0,0]
         self.last_event_x = event.x
         self.last_event_y = event.y
         self.scan_dragto(event.x, event.y, gain=1)
 
     def release_click(self, event) :
-        if self.selection_tool_b != "" :
+        if self.selection_tool_b :
             if self.selection_tool_b.toggled :
-                if (self.selection_coords[2] < self.selection_coords[0]) :
-                    tmp = self.selection_coords[2]
-                    self.selection_coords[2] = self.selection_coords[0]
-                    self.selection_coords[0] = tmp
-                if (self.selection_coords[3] < self.selection_coords[1]) :
-                    tmp = self.selection_coords[3]
-                    self.selection_coords[3] = self.selection_coords[1]
-                    self.selection_coords[1] = tmp
-                print(self.selection_coords)
+                self.selection_rectangle.resize(event)
+                return
 
-    def delete_selection(self) :
-        if self.selection_rectangle != "" :
+    def delete_selection_rectangle(self) :
+        if self.selection_rectangle :
             self.selection_rectangle.delete()
-            self.selection_rectangle = ""
-        self.selection_coords = [0,0,0,0]
+            self.selection_rectangle = None
                 
     # Windows zoom
     def zoomer(self, event):
@@ -367,7 +683,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
 
     # Actually zoom the picture
     def zoom_image(self, x, y) :
-        if self.image_no_zoom_PIL == "" :
+        if not self.image_no_zoom_PIL :
             return
         iw = int(self.image_no_zoom_PIL.width*self.image_scale)
         ih = int(self.image_no_zoom_PIL.height*self.image_scale)
@@ -376,14 +692,8 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.image = ImageTk.PhotoImage(i1)
         self.configure(scrollregion=(0, 0, self.image.width(), 
             self.image.height()))
-        self.delete_selection()
+        self.delete_selection_rectangle()
         self.draw_image()
-        '''
-        ids = [i for i in self.find_all() if i != self.image_id]
-        print(ids, self.image_scale)
-        self.scale(ids, x, y, 
-            self.image_scale, self.image_scale)
-        '''
 
     # Set image from provided PIL image but do not draw
     def set_image(self, im) :
@@ -391,7 +701,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.image_no_zoom_PIL_RGB = self.image_no_zoom_PIL.convert("RGB")
         self.image_no_zoom = ImageTk.PhotoImage(self.image_no_zoom_PIL_RGB)
         self.image = self.image_no_zoom
-        self.image_aspect_ratio = self.image.width()/self.image.height()
+        self.aspect_ratio = self.image.width()/self.image.height()
         self.configure(scrollregion=(0, 0, self.image.width(), 
             self.image.height()))
 
@@ -400,12 +710,18 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.image_scale = 1.0 # Re-set zoom level
         file = askopenfile(mode="rb", title="Select an image to load")
         if file :
+            path = ""
+            splitpath = file.name.split("/")
+            for i, p in enumerate(splitpath) :
+                if i < len(splitpath)-1 :
+                    path += p+"/"
+            self.filepath = path
             self.filename = (file.name.split("/")[-1]).split(".")[0]
             self.set_image(Image.open(file.name))
 
     # (Re-)Draw image on canvas
     def draw_image(self):
-        if (self.image_id == -1) :
+        if not self.image_id :
             self.image_id = self.create_image(0, 0, anchor='nw', 
                 image=self.image)
         else :
@@ -428,16 +744,116 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.load_image()
         self.draw_image()
 
+    # Resize image
+    def resize_image(self, x, y, mode) :
+        self.undo_buffer = self.image_no_zoom_PIL.copy()
+        self.set_zoom_draw_image(
+            self.image_no_zoom_PIL.resize((x,y),
+            resample=interpolation_modes[mode]))
+
+    # Crop image
+    def crop_image(self, **kwargs) :
+        x0 = self.image_no_zoom_PIL.width
+        y0 = self.image_no_zoom_PIL.height
+        box = None
+        # Crop from anchor and final resolution
+        if "anchor" in kwargs and "size" in kwargs :
+            anchor = anchor_points[kwargs["anchor"]]
+            x = min(kwargs["size"][0], x0)
+            y = min(kwargs["size"][1], y0)
+            dx = int(x0-x)
+            dy = int(y0-y)
+            dx_2 = int(dx/2.0)
+            dy_2 = int(dy/2.0) 
+            if anchor == "c" :
+                box = (dx_2, dy_2, x+dx_2, y+dy_2)
+            elif anchor == "n" :
+                box = (dx_2, 0, x+dx_2, y)
+            elif anchor == "ne" :
+                box = (dx, 0, x+dx, y)
+            elif anchor == "e" :
+                box = (dx, dy_2, x+dx, y+dy_2)
+            elif anchor == "se" :
+                box = (dx, dy, x+dx, y+dy)
+            elif anchor == "s" :
+                box = (dx_2, dy, x+dx_2, y+dy)
+            elif anchor == "sw" :
+                box = (0, dy, x, y+dy)
+            elif anchor == "w" :
+                box = (0, dy_2, x, y+dy_2)
+            elif anchor == "nw" :
+                box = (0, 0, x, y)
+        # Crop from bounding box
+        elif "box" in kwargs :
+            box = kwargs["box"]
+            box = (max(box[0], 0), max(box[1], 0), min(box[2], x0), 
+                min(box[3], y0))
+        self.undo_buffer = self.image_no_zoom_PIL.copy()
+        self.set_zoom_draw_image(self.image_no_zoom_PIL.crop(box))
+
+    # Undo (specifically meant for resize_image or crop_image)
+    def undo(self) :
+        if self.undo_buffer :
+            self.set_zoom_draw_image(self.undo_buffer)
+            self.undo_buffer = None
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
-#
+# Toggleable button with option image to be provided for its different states
+class ToggleButton(tk.Button) :
+
+    def __init__(self, *args, **kwargs) :
+        
+        # Pop before passing to tk.Button to avoid dict errors
+        self.on_i = kwargs.pop("onimage", None)
+        self.off_i = kwargs.pop("offimage", None)
+        
+        if "command" not in kwargs :
+            kwargs["command"] = self.on_toggle_change
+        tk.Button.__init__(self, *args, **kwargs, relief="raised")
+        
+        # Button starts off
+        self.toggled = False
+        if self.off_i and "image" not in kwargs:
+            self.config(image=self.off_i)
+
+    def on_toggle_change(self, *args) :
+        self.toggled = not self.toggled
+        self.update_appearance()
+        
+    def toggle_on(self) :
+        self.toggled = True
+        self.update_appearance()
+
+    def toggle_off(self) :
+        self.toggled = False
+        self.update_appearance()
+
+    def update_appearance(self) :
+        if self.toggled :
+            if self.on_i :
+                self.config(image=self.on_i)
+            self.config(relief="sunken")
+        else :
+            if self.off_i :
+                self.config(image=self.off_i)
+            self.config(relief="raised")
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+
+# Class to handle an entry of an integer in a way that is closer to what I 
+# need compared to tk.IntVar
 class IntEntry(tk.Entry) :
 
     def __init__(self, *args, **kwargs) :
         tk.Entry.__init__(self, *args, **kwargs)
         self.sv = tk.StringVar()
         self.config(textvariable=self.sv)
-        self.value = ""
+        self.value = None
         self.min_value = 0
         self.max_value = 1e69
         self.valid = False
@@ -475,38 +891,141 @@ class IntEntry(tk.Entry) :
         self.sv.trace_add(*args)
 
 #-----------------------------------------------------------------------------#
-
-class ToggleButton(tk.Button) :
-
-    def __init__(self, *args, **kwargs) :
-        tk.Button.__init__(self, *args, **kwargs, relief="raised", 
-            command=self.on_toggle_change)
-        self.toggled = False
-
-    def on_toggle_change(self, *args) :
-        self.toggled = not self.toggled
-        if self.toggled :
-            self.config(relief="sunken")
-        else :
-            self.config(relief="raised")
-
+#-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
-# Classes for handling the log redirection
-class IODirector(object):
+# Compund object consisting of a label, two entries represnting and x and y
+# resolution fields as well as a middle button that acts as an aspect ratio
+# lock
+class ResolutionLabelEntry :
 
-    def __init__(self, log_t):
-        self.log_t = log_t
+    def __init__(self, *args, **kwargs) :
+        self.top_level = args[0]
+        self.row = kwargs.get("row", 0)
+        self.column = kwargs.get("column", 0)
+        self.min_value = kwargs.get("minvalue")
+        self.max_value = kwargs.get("maxvalue")
+        self.last_modified = None
+        self.update_in_progress = False
+        self.aspect_ratio = kwargs.get("aspectratio", 0.0)
+        self.pads = kwargs.get("pads", kwargs)
+        self.buffer = None
 
-class StdoutDirector(IODirector):
+        self.label_dict = {}
+        add_from_kwargs(self.label_dict, "text", "labeltext", kwargs)
+        add_from_kwargs(self.label_dict, "width", "labelwidth", kwargs)
+        self.l = tk.Label(self.top_level, anchor=tk.W, **self.label_dict)
+        self.l.grid(row=self.row, column=self.column, sticky=tk.W, 
+            **self.pads[0])
+        
+        self.entry_dict = {}
+        add_from_kwargs(self.entry_dict, "width", "entrywidth", kwargs)
 
-    def write(self, msg):
-        self.log_t.update_idletasks()
-        self.log_t.insert(tk.END, msg)
-        self.log_t.yview(tk.END)
-    def flush(self):
-        pass
+        self.x_e = IntEntry(self.top_level, **self.entry_dict)
+        self.x_e.grid(row=self.row, column=self.column+1, sticky=tk.W+tk.E, 
+            **self.pads[1])
 
+        self.aspect_ratio_b = ToggleButton(self.top_level, bd=0,
+            onimage=ImageTk.PhotoImage(file="lock.png"), 
+            offimage=ImageTk.PhotoImage(file="ulock.png"), **self.entry_dict)
+        self.aspect_ratio_b.config(command=self.on_toggle_aspect_ratio)
+        self.aspect_ratio_b.grid(row=self.row, column=self.column+2, 
+            sticky=tk.W+tk.E, **self.pads[2])
+
+        self.y_e = IntEntry(self.top_level, **self.entry_dict)
+        self.y_e.grid(row=self.row, column=self.column+3, sticky=tk.W+tk.E, 
+            **self.pads[3])
+
+        if self.min_value :
+            self.x_e.set_min_value(self.min_value)
+            self.y_e.set_min_value(self.min_value)
+        if self.max_value :
+            self.x_e.set_min_value(self.max_value)
+            self.y_e.set_min_value(self.max_value)
+
+        self.x_e.trace_add("write", self.on_write_x)
+        self.y_e.trace_add("write", self.on_write_y)
+
+    def disable(self) :
+        self.x_e.config(state=tk.DISABLED)
+        self.y_e.config(state=tk.DISABLED)
+        self.aspect_ratio_b.config(state=tk.DISABLED)
+
+    def enable(self) :
+        self.x_e.config(state=tk.NORMAL)
+        self.y_e.config(state=tk.NORMAL)
+        self.aspect_ratio_b.config(state=tk.NORMAL)
+
+    def on_toggle_aspect_ratio(self) :
+        self.aspect_ratio_b.on_toggle_change()
+        if self.aspect_ratio_b.toggled :
+
+            # Update last modified variable
+            if self.last_modified == "x" :
+                self.update_complementary_x()
+            elif self.last_modified == "y" :
+                self.update_complementary_y()
+
+    def on_write_x(self, *args) :
+        if self.update_in_progress :
+            return
+        old_x = self.x_e.value
+        self.x_e.on_write(args)
+        if not self.x_e.valid :
+            return
+        if self.x_e.value != old_x :
+            self.last_modified = "x"
+        self.update_complementary_x()
+
+    def on_write_y(self, *args) :
+        if self.update_in_progress :
+            return
+        old_y = self.y_e.value
+        self.y_e.on_write(args)
+        if not self.y_e.valid :
+            return
+        if self.y_e.value != old_y :
+            self.last_modified = "y"
+        self.update_complementary_y()
+
+    def set(self, x, y) :
+        self.aspect_ratio = float(x)/float(y)
+        self.x_e.set_value(x)
+        self.y_e.set_value(y)
+
+    def set_buffer(self) :
+        self.buffer = (self.x_e.value, self.y_e.value)
+
+    def reset_from_buffer(self) : 
+        if self.buffer :
+            self.set(self.buffer[0], self.buffer[1])
+        self.buffer = None
+
+    # Update out_res_y to be consistent with the current out_res_x if
+    # the locked aspect ratio is toggled
+    def update_complementary_x(self) :
+        self.update_in_progress = True
+        if (self.aspect_ratio != 0.0 and
+            self.aspect_ratio_b.toggled) :
+            new_y = int(self.x_e.value/self.aspect_ratio)
+            self.y_e.set_value(new_y)
+        self.update_in_progress = False
+
+    # Update out_res_x to be consistent with the current out_res_y if
+    # the locked aspect ratio is toggled
+    def update_complementary_y(self) :
+        self.update_in_progress = True
+        if (self.aspect_ratio != 0.0 and 
+            self.aspect_ratio_b.toggled) :
+            new_x = int(self.y_e.value*self.aspect_ratio)
+            self.x_e.set_value(new_x)
+        self.update_in_progress = False  
+
+    def valid(self) :
+        return (self.x_e.valid and self.y_e.valid)
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
 class Application(tk.Tk) :
@@ -516,34 +1035,43 @@ class Application(tk.Tk) :
         tk.Tk.__init__(self, *args, **kwargs)
         self.title("VIMPRO - Virmodoetiae Image Processor")
         self.iconphoto(False, ImageTk.PhotoImage(file='icon.png'))
-        self.bind("<Configure>", self.on_resize)
+        self.bind("<Configure>", self.on_main_window_resize)
         self.frames = []
         
         # UI Layout ----------------------------------------------------------#
-        pad0 = 20
-        pad1 = pad0/4
-        entry_size = 7
-        label_size = 18
+        self.label_width = 20
+        self.button_width = 10
+        self.entry_width = 8
+        self.default_pad = 20
+        self.pad0 = Padding(self.default_pad, self.default_pad)
+        self.pad1 = Padding(self.default_pad/4, self.default_pad/8)
 
+        self.left_frame = tk.Frame(self)
+        self.left_frame.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.right_frame = tk.Frame(self)
+        self.right_frame.grid(row=0, column=1, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.frames.append(self.left_frame)
+        self.frames.append(self.right_frame)
+        
         #---------------------------------------------------------------------#
         # Input frame and canvas (NW) ----------------------------------------#
-        self.frame0 = tk.LabelFrame(self, text="Input")
-        self.frame0.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
-            padx=(pad0, pad0/2), pady=(pad0, pad0/2))
-        self.frames.append(self.frame0)
-        self.input_canvas = MouseScrollableImageCanvas(self.frame0, width=600, 
-            height=400)
-        self.input_canvas.pack(fill=tk.BOTH)
+        self.input_frame = tk.LabelFrame(self.left_frame, text="Input")
+        self.input_frame.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
+            **self.pad0.get("nw"))
+        self.frames.append(self.input_frame)
+        self.input_canvas = MouseScrollableImageCanvas(self.input_frame, 
+            width=600, height=300)
+        self.input_canvas.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
 
         #---------------------------------------------------------------------#
         # Output frame and canvas (SW) ---------------------------------------#
-        self.frame1 = tk.LabelFrame(self, text="Output")
-        self.frame1.grid(row=1, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
-            padx=(pad0, pad0/2), pady=(pad0/2, pad0))
-        self.frames.append(self.frame1)
-        self.output_canvas = MouseScrollableImageCanvas(self.frame1, width=600, 
-            height=400)
-        self.output_canvas.pack(fill=tk.BOTH)
+        self.output_frame = tk.LabelFrame(self.left_frame, text="Output")
+        self.output_frame.grid(row=1, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
+            **self.pad0.get("sw"))
+        self.frames.append(self.output_frame)
+        self.output_canvas = MouseScrollableImageCanvas(self.output_frame, 
+            width=600, height=300)
+        self.output_canvas.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
 
         # Image processor object
         self.image_processor = ImageProcessor(self.input_canvas, 
@@ -551,211 +1079,513 @@ class Application(tk.Tk) :
 
         #---------------------------------------------------------------------#
         # Control frame (NE) -------------------------------------------------#
-        self.frame2 = tk.LabelFrame(self, text="Controls")
-        self.frame2.grid(row=0, column=1, sticky=tk.W+tk.E+tk.N+tk.S, 
-            padx=(pad0/2, pad0), pady=(pad0, pad0/2))
-        self.frames.append(self.frame2)
+        self.ctrl_frame = tk.LabelFrame(self.right_frame, text="Controls", 
+            height=12)
+        self.ctrl_frame.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N, 
+            **self.pad0.get("ne"))
+        self.frames.append(self.ctrl_frame)
+        n_cols = 5
+        self.ctrl_rows = {"Input options" : 0, "Load image" : 1, 
+            "Resize tool" : 2, "Crop tool" : 3, "Processing options" : 4, 
+            "Mode" : 5, "Number of palettes" : 6, "Palette size" : 7, 
+            "Bits per channel (R,G,B)" : 8, "Fidelity" : 9, "Tile size" : 10,
+            "Output resolution" : 11, "Process image" : 12, 
+            "Save options" : 13, "Pixel size" : 14, "Final resolution" : 15,
+            "Save image" : 16}
 
         # Input options ------------------------------------------------------#
-        self.in_opt = tk.LabelFrame(self.frame2, text="Input options")
-        self.in_opt.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
-            padx=pad1, pady=(pad1, pad1/2))
+        row_name = "Input options"
+        row_n = self.ctrl_rows[row_name]
+        ttk.Separator(self.ctrl_frame, orient=tk.HORIZONTAL).grid(row=row_n, 
+            column=0, columnspan=n_cols, sticky=tk.W+tk.E, 
+            **self.pad1.get("c", "xy", True))
+        tk.Label(self.ctrl_frame, text=row_name).grid(row=row_n, column=0, 
+            padx=self.label_width, sticky=tk.W)
 
-        # Image loading
-        self.load_image_b = tk.Button(self.in_opt, 
-            text="Load image", command=self.load_image)
-        self.load_image_b.grid(row=0, column=0, sticky=tk.W+tk.E, 
-            padx=(pad1, pad1/2), pady=(pad1, pad1/2))
+        # Load image
+        row_name = "Load image"
+        row_n = self.ctrl_rows[row_name]
+        self.load_image_b = tk.Button(self.ctrl_frame, text=row_name,
+            width=self.button_width, command=self.on_load_image)
+        self.load_image_b.grid(row=row_n, column=0, sticky=tk.W+tk.E+tk.N, 
+            **self.pad1.get("nw", "xx"))
 
-        # Selection tool
-        self.selection_tool_b = ToggleButton(self.in_opt,
-            text="Selection tool")
-        self.selection_tool_b.config(command=self.toggle_selection_tool)
-        self.selection_tool_b.grid(row=0, column=1, sticky=tk.W+tk.E,
-            padx=(pad1/2, pad1), pady=(pad1, pad1/2))
+        # Resize tool ----------------#
+        row_name = "Resize tool"
+        row_n = self.ctrl_rows[row_name]
+        self.open_resize_b = ToggleButton(self.ctrl_frame, text=row_name,
+            width=self.button_width, command=self.on_open_resize)
+        self.open_resize_b.grid(row=row_n, column=0, sticky=tk.W+tk.E+tk.N,
+            **self.pad1.get("w", "xx"))
+
+        # Resize frame
+        self.resize_frame = tk.LabelFrame(self.ctrl_frame)
+        self.frames.append(self.resize_frame)
+        
+        # Target resolution for resize
+        self.resize_res_le = ResolutionLabelEntry(self.resize_frame,
+            row=0, col=0, minvalue=1, labeltext="Resolution",
+            entrywidth=int(self.entry_width/2), pads=[self.pad1.get("nw"),
+            self.pad1.get("n"), self.pad1.get("n"), self.pad1.get("ne")])
+
+        # Interpolation mode
+        interp_mode_l = tk.Label(self.resize_frame, text= "Interpolation")
+        interp_mode_l.grid(row=1, column=0, sticky=tk.W, **self.pad1.get("w"))
+
+        self.interp_mode_sv = tk.StringVar()
+        self.interp_mode_om = ttk.OptionMenu(self.resize_frame, 
+            self.interp_mode_sv, list(interpolation_modes.keys())[0],
+            *list(interpolation_modes.keys()))
+        self.interp_mode_om.grid(row=1, column=1, columnspan=3,
+            sticky=tk.W+tk.E+tk.N, **self.pad1.get("e"))
+
+        # Actual resize and undo resize buttons
+        self.resize_sub_frame = tk.Frame(self.resize_frame)
+        self.resize_sub_frame.grid(row=2, column=0, columnspan=4,
+            sticky=tk.W+tk.E+tk.N)
+        self.frames.append(self.resize_sub_frame)
+
+        self.resize_b = tk.Button(self.resize_sub_frame, text="Resize",
+            command=self.on_resize)
+        self.resize_b.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N,
+            **self.pad1.get("sw"))
+
+        # Undo resize button
+        self.undo_resize_b = tk.Button(self.resize_sub_frame, text="Undo",
+            command=self.on_undo_resize)
+        self.undo_resize_b.grid(row=0, column=1, sticky=tk.W+tk.E+tk.N,
+            **self.pad1.get("se"))
+
+        # Crop tool ------------------#
+        row_name = "Crop tool"
+        row_n = self.ctrl_rows[row_name]
+        self.open_crop_b = ToggleButton(self.ctrl_frame, text=row_name,
+            width=self.button_width, command=self.on_open_crop)
+        self.open_crop_b.grid(row=row_n, column=0, sticky=tk.W+tk.E+tk.N,
+            **self.pad1.get("sw", "xx"))
+
+        # Crop frame
+        self.crop_frame = tk.LabelFrame(self.ctrl_frame)
+        self.frames.append(self.crop_frame)
+
+        # Target resolution for crop
+        self.crop_res_le = ResolutionLabelEntry(self.crop_frame, 
+            row=0, col=0, minvalue=1, labeltext="Resolution",
+            entrywidth=int(self.entry_width/2), pads=[self.pad1.get("nw"), 
+            self.pad1.get("n"), self.pad1.get("n"), self.pad1.get("ne")])
+
+        # Cropping anchor
+        crop_anchor_l = tk.Label(self.crop_frame, text= "Crop anchor")
+        crop_anchor_l.grid(row=1, column=0, sticky=tk.W, **self.pad1.get("w"))
+
+        self.crop_anchor_sv = tk.StringVar()
+        self.crop_anchor_om = ttk.OptionMenu(self.crop_frame, 
+            self.crop_anchor_sv, list(anchor_points.keys())[0], 
+            *list(anchor_points.keys()))
+        self.crop_anchor_om.grid(row=1, column=1, columnspan=3,
+            sticky=tk.W+tk.E+tk.N, **self.pad1.get("e"))
+
+        # Selection tool, do crop and undo crop
+        self.crop_sub_frame = tk.Frame(self.crop_frame)
+        self.crop_sub_frame.grid(row=2, column=0, columnspan=4, 
+            sticky=tk.W+tk.E+tk.N)
+        self.frames.append(self.crop_sub_frame)
+
+        self.selection_tool_b = ToggleButton(self.crop_sub_frame, 
+            text="Selection", command=self.on_selection_tool)
+        self.selection_tool_b.grid(row=0, column=0, 
+            sticky=tk.W+tk.E+tk.N, **self.pad1.get("sw"))
+
+        self.crop_b = tk.Button(self.crop_sub_frame, text="Crop", 
+            command=self.on_crop)
+        self.crop_b.grid(row=0, column=1, 
+            sticky=tk.W+tk.E+tk.N, **self.pad1.get("sw"))
+
+        self.undo_crop_b = tk.Button(self.crop_sub_frame, text="Undo",
+            command=self.on_undo_crop)
+        self.undo_crop_b.grid(row=0, column=2,
+            sticky=tk.W+tk.E+tk.N, **self.pad1.get("se"))
+
+        # Initial status for all undo buttons is off
+        self.update_undo_b()
+
+        # Link selection tool to input canvas
         self.input_canvas.selection_tool_b = self.selection_tool_b
         
-        # Processor options --------------------------------------------------#
-        self.proc_opt = tk.LabelFrame(self.frame2, text="Processor options")
-        self.proc_opt.grid(row=1, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
-            padx=pad1, pady=(pad1/2, pad1/2))
-        
-        # Number of colors
-        colors_l = tk.Label(self.proc_opt, text="Number of colors", 
-            anchor=tk.W, width=label_size)
-        colors_l.grid(row=0, column=0, sticky=tk.W, 
-            padx=(pad1, pad1/2), pady=(pad1, pad1/2))
-        self.colors_e = IntEntry(self.proc_opt, width=entry_size)
-        self.colors_e.set_value(4)
-        self.colors_e.set_min_value(1)
-        self.colors_e.grid(row=0, column=1, columnspan=2, sticky=tk.W, 
-            padx=(pad1/2, pad1), pady=(pad1, pad1/2))
+        # Processing options -------------------------------------------------#
+        row_name = "Processing options"
+        row_n = self.ctrl_rows[row_name]
+        ttk.Separator(self.ctrl_frame, orient=tk.HORIZONTAL).grid(row=row_n,
+            column=0, columnspan=n_cols, sticky=tk.W+tk.E, 
+            **self.pad1.get("c", "xy", True))
+        tk.Label(self.ctrl_frame, text=row_name).grid(row=row_n, column=0,
+            padx=self.label_width, sticky=tk.W)
 
-        # Bits per color channel
-        bits_per_channel_l = tk.Label(self.proc_opt, 
-            text= "Bits per channel (R,G,B)")
-        bits_per_channel_l.grid(row=1, column=0, sticky=tk.W,
-            padx=(pad1, pad1/2), pady=(pad1/2, pad1/2))
+        # Number of palettes -------------#
+        row_name = "Number of palettes"
+        row_n = self.ctrl_rows[row_name]
+        self.palettes_n_l = tk.Label(self.ctrl_frame, text=row_name, 
+            anchor=tk.W)
+        self.palettes_n_e = IntEntry(self.ctrl_frame, width=self.entry_width)
+        self.palettes_n_e.set_min_value(1)
+        self.palettes_n_e.set_value(8)
+
+        # Processor mode -------------#
+        # This should come first, but the option menu needs to be tied to
+        # the creation-destruction of additional entries/labels when a certain
+        # proc_mode_om is selected. The show/hide functionality of these
+        # fields needs to be passed as command, but this means that I cannot
+        # create proc_mode_om until after I have created all the
+        # entries/labels that are referenced by the command. Thus, proc_mode
+        # is created at the end
+        row_name = "Mode"
+        row_n = self.ctrl_rows[row_name]
+        proc_mode_l = tk.Label(self.ctrl_frame, text=row_name)
+        proc_mode_l.grid(row=row_n, column=0, sticky=tk.W,
+            **self.pad1.get("w"))
+
+        self.proc_mode_sv = tk.StringVar()
+        self.proc_mode_sv.set("Default")
+        self.proc_mode_om = ttk.OptionMenu(self.ctrl_frame, self.proc_mode_sv,
+            self.image_processor.modes[0], *self.image_processor.modes,
+            command=self.on_proc_mode)
+        self.proc_mode_om.grid(row=row_n, column=1, columnspan=3,
+            sticky=tk.W+tk.E, **self.pad1.get("e"))
+
+        # Palette size ---------------#
+        row_name = "Palette size"
+        row_n = self.ctrl_rows[row_name]
+        palette_size_l = tk.Label(self.ctrl_frame, text=row_name, anchor=tk.W)
+        palette_size_l.grid(row=row_n, column=0, sticky=tk.W,
+            **self.pad1.get("w"))
+        self.palette_size_e = IntEntry(self.ctrl_frame, width=self.entry_width)
+        self.palette_size_e.set_value(4)
+        self.palette_size_e.set_min_value(1)
+        self.palette_size_e.grid(row=row_n, column=1, columnspan=3,
+            sticky=tk.W+tk.E, **self.pad1.get("e"))
+
+        # Number of palettes (only if self.proc_mode_om == Tiled or GameBoy)
+        # Left empty row at proc_start_row + 3
         
-        self.bits_R_e = IntEntry(self.proc_opt, width=entry_size)
+        # RGB channel bits ------------#
+        row_name = "Bits per channel (R,G,B)"
+        row_n = self.ctrl_rows[row_name]
+        bits_per_channel_l = tk.Label(self.ctrl_frame, text= row_name,
+            anchor=tk.W, width=self.label_width)
+        bits_per_channel_l.grid(row=row_n, column=0, sticky=tk.W,
+            **self.pad1.get("w"))
+
+        self.bits_R_e = IntEntry(self.ctrl_frame, width=self.entry_width)
         self.bits_R_e.set_value(16)
         self.bits_R_e.set_min_value(2)
         self.bits_R_e.set_max_value(16)
-        self.bits_R_e.grid(row=1, column=1, sticky=tk.W+tk.E,
-            padx=(pad1/2, pad1/2), pady=(pad1/2, pad1/2))
+        self.bits_R_e.grid(row=row_n, column=1, sticky=tk.W+tk.E,
+            **self.pad1.get("c"))
         
-        self.bits_G_e = IntEntry(self.proc_opt, width=entry_size)
+        self.bits_G_e = IntEntry(self.ctrl_frame, width=self.entry_width)
         self.bits_G_e.set_value(16)
         self.bits_G_e.set_min_value(2)
         self.bits_G_e.set_max_value(16)
-        self.bits_G_e.grid(row=1, column=2, sticky=tk.W+tk.E,
-            padx=(pad1/2, pad1/2), pady=(pad1/2, pad1/2))
+        self.bits_G_e.grid(row=row_n, column=2, sticky=tk.W+tk.E,
+            **self.pad1.get("c"))
         
-        self.bits_B_e = IntEntry(self.proc_opt, width=entry_size)
+        self.bits_B_e = IntEntry(self.ctrl_frame, width=self.entry_width)
         self.bits_B_e.set_value(16)
         self.bits_B_e.set_min_value(2)
         self.bits_B_e.set_max_value(16)
-        self.bits_B_e.grid(row=1, column=3, sticky=tk.W+tk.E,
-            padx=(pad1/2, pad1), pady=(pad1/2, pad1/2))
+        self.bits_B_e.grid(row=row_n, column=3, sticky=tk.W+tk.E,
+            **self.pad1.get("e"))
 
-        # Color fidelity
-        fidelity_l = tk.Label(self.proc_opt, text="Color fidelity", 
-            anchor=tk.W, width=label_size)
-        fidelity_l.grid(row=2, column=0, sticky=tk.W, 
-            padx=(pad1, pad1/2), pady=(pad1/2, pad1/2))
+        # Color fidelity -------------#
+        row_name = "Fidelity"
+        row_n = self.ctrl_rows[row_name]
+        fidelity_l = tk.Label(self.ctrl_frame, text=row_name, anchor=tk.W,
+            width=self.label_width)
+        fidelity_l.grid(row=row_n, column=0, sticky=tk.W, **self.pad1.get("w"))
 
-        self.fidelity_e = tk.Scale(self.proc_opt, from_=1, to=10, 
+        self.fidelity_e = tk.Scale(self.ctrl_frame, from_=1, to=10,
             orient=tk.HORIZONTAL, showvalue=False)
-        self.fidelity_e.grid(row=2, column=1, columnspan=3, sticky=tk.W+tk.E,
-            padx=(pad1/2, pad1), pady=(pad1/2, pad1/2))
+        self.fidelity_e.set(4) # Default value
+        self.fidelity_e.grid(row=row_n, column=1, columnspan=3,
+            sticky=tk.W+tk.E, **self.pad1.get("e"))
 
-        # Output resolution
-        out_res_l = tk.Label(self.proc_opt, text="Output resolution", 
-            anchor=tk.W, width=label_size)
-        out_res_l.grid(row=3, column=0, sticky=tk.W, 
-            padx=(pad1, pad1/2), pady=(pad1/2, pad1/2))
+        # Tile size ------------------#
+        # Number of palettes -------------#
+        row_name = "Tile size"
+        row_n = self.ctrl_rows[row_name]
+        self.tile_size_l = tk.Label(self.ctrl_frame, text=row_name, 
+            anchor=tk.W)
+        self.tile_size_e_x = IntEntry(self.ctrl_frame, width=self.entry_width)
+        self.tile_size_e_x.set_min_value(1)
+        self.tile_size_e_x.set_value(8)
+        self.tile_size_e_y = IntEntry(self.ctrl_frame, width=self.entry_width)
+        self.tile_size_e_y.set_min_value(1)
+        self.tile_size_e_y.set_value(8)
+
+        # Output resolution ----------#
+        row_name = "Output resolution"
+        row_n = self.ctrl_rows[row_name]
+        self.out_res_le = ResolutionLabelEntry(self.ctrl_frame, row=row_n,
+            col=0, minvalue=1, labeltext=row_name, labelwidth=self.label_width,
+            entrywidth=self.entry_width, pads=[self.pad1.get("w"), 
+            self.pad1.get("c"), self.pad1.get("c"), self.pad1.get("e")])
+
+        # Process image --------------#
+        row_name = "Process image"
+        row_n = self.ctrl_rows[row_name]
+        self.process_image_b = tk.Button(self.ctrl_frame, 
+            width=self.button_width, text=row_name, command=self.process_image)
+        self.process_image_b.grid(row=row_n, column=0, sticky=tk.W+tk.E, 
+            **self.pad1.get("sw", "xx"))
         
-        self.out_res_x_e = IntEntry(self.proc_opt, width=entry_size)
-        self.out_res_x_e.set_min_value(1)
-        self.out_res_x_e.grid(row=3, column=1, sticky=tk.W, 
-            padx=(pad1/2, pad1/2), pady=(pad1/2, pad1/2))
-        
-        self.out_res_y_e = IntEntry(self.proc_opt, width=entry_size)
-        self.out_res_y_e.set_min_value(1)
-        self.out_res_y_e.grid(row=3, column=3, sticky=tk.W, 
-            padx=(pad1/2, pad1), pady=(pad1/2, pad1/2))
-        
-        self.aspect_ratio_i_lock = ImageTk.PhotoImage(file="lock.png")
-        self.aspect_ratio_i_ulock =ImageTk.PhotoImage(file="ulock.png")
-        self.aspect_ratio_b_status = 0
-        self.aspect_ratio_b = tk.Button(self.proc_opt, bd=0,
-            image=self.aspect_ratio_i_ulock, command=self.toggle_aspect_ratio)
-        self.aspect_ratio_b.grid(row=3, column=2,
-            padx=(pad1/2, pad1/2), pady=(pad1/2, pad1/2))
-
-        # Process image
-        process_image_b = tk.Button(self.proc_opt, 
-            text="Process image", command=self.process_image)
-        process_image_b.grid(row=10, column=0, sticky=tk.W, 
-            padx=pad1, pady=(pad1/2, pad1))
-
-        # Set entry functionality
-        self.last_modified_out_res = "x"
-        self.update_in_progress = False
-        self.out_res_x_e.trace_add("write", self.update_out_res_x)
-        self.out_res_y_e.trace_add("write", self.update_out_res_y)
-
         # Save options -------------------------------------------------------#
-        self.save_opt = tk.LabelFrame(self.frame2, text="Save options")
-        self.save_opt.grid(row=2, column=0, sticky=tk.W+tk.E+tk.N+tk.S, 
-            padx=pad1, pady=(pad1/2, pad1))
+        row_name = "Save options"
+        row_n = self.ctrl_rows[row_name]
+        ttk.Separator(self.ctrl_frame, orient=tk.HORIZONTAL).grid(row=row_n,
+            column=0, columnspan=n_cols, sticky=tk.W+tk.E, 
+            **self.pad1.get("c", "xy", True))
+        tk.Label(self.ctrl_frame, text=row_name).grid(row=row_n, column=0,
+            padx=self.label_width, sticky=tk.W)
 
-        # Pixel size
-        pixel_size_l = tk.Label(self.save_opt, text="Pixel size", 
-            anchor=tk.W, width=label_size)
-        pixel_size_l.grid(row=0, column=0, sticky=tk.W, 
-            padx=(pad1, pad1/2), pady=(pad1/2, pad1/2))
-        self.pixel_size_e = IntEntry(self.save_opt, width=entry_size)
+        # Pixel size -----------------#
+        row_name = "Pixel size"
+        row_n = self.ctrl_rows[row_name]
+        pixel_size_l = tk.Label(self.ctrl_frame, text=row_name, anchor=tk.W,
+            width=self.label_width)
+        pixel_size_l.grid(row=row_n, column=0, sticky=tk.W,
+            **self.pad1.get("nw"))
+        self.pixel_size_e = IntEntry(self.ctrl_frame, width=self.entry_width)
         self.pixel_size_e.set_value(1)
         self.pixel_size_e.set_min_value(1)
-        self.pixel_size_e.grid(row=0, column=1, sticky=tk.W, 
-            padx=(pad1/2, pad1), pady=(pad1, pad1/2))
+        self.pixel_size_e.grid(row=row_n, column=1, sticky=tk.W,
+            **self.pad1.get("ne"))
 
-        # Final output resolution
-        final_out_res_l = tk.Label(self.save_opt, text="Final resolution", 
-            anchor=tk.W, width=label_size)
-        final_out_res_l.grid(row=1, column=0, sticky=tk.W, 
-            padx=(pad1, pad1/2), pady=(pad1/2, pad1/2))
-        self.final_out_res_sv = tk.StringVar(value="0 x 0")
-        final_out_res_val_l = tk.Label(self.save_opt,
-            textvariable=self.final_out_res_sv, anchor=tk.W)
-        final_out_res_val_l.grid(row=1, column=1, sticky=tk.W+tk.E,
-            padx=(pad1/2, pad1), pady=(pad1/2, pad1/2))
-        self.update_final_resolution()
-
-        # Save output image
-        save_image_b = tk.Button(self.save_opt, text="Save image", 
-            command=self.save_image)
-        save_image_b.grid(row=2, column=0, sticky=tk.W, padx=pad1, 
-            pady=(pad1/2, pad1))
+        # Final output resolution of the save file
+        row_name = "Final resolution"
+        row_n = self.ctrl_rows[row_name]
+        save_res_l = tk.Label(self.ctrl_frame, text=row_name, anchor=tk.W)
+        save_res_l.grid(row=row_n, column=0, sticky=tk.W, **self.pad1.get("w"))
+        self.save_res_sv = tk.StringVar(value="0 x 0")
+        save_res_val_l = tk.Label(self.ctrl_frame, anchor=tk.W,
+            textvariable=self.save_res_sv)
+        save_res_val_l.grid(row=row_n, column=1, columnspan=3, sticky=tk.W,
+            **self.pad1.get("e"))
         
-        # Set entry functionality
-        self.pixel_size_e.trace_add("write", self.update_pixel_size)
+        # Save output image ----------#
+        row_name = "Save image"
+        row_n = self.ctrl_rows[row_name] 
+        self.save_image_b = tk.Button(self.ctrl_frame, width=self.button_width,
+            text=row_name, command=self.on_save_image)
+        self.save_image_b.grid(row=row_n, column=0, sticky=tk.W+tk.E,
+            **self.pad1.get("sw", "xx"))
+
+        # Add functionality at the end to avoid potential issues regarding
+        # referencing missing variables
+        self.pixel_size_e.trace_add("write", self.on_write_pixel_size)
 
         #---------------------------------------------------------------------#
         # Logging frame (SE) -------------------------------------------------#
-        self.frame3 = tk.LabelFrame(self, text="Log", width=400)
-        self.frame3.grid(row=1, column=1, sticky=tk.W+tk.E+tk.N+tk.S,
-            padx=(pad0/2, pad0), pady=(pad0/2, pad0))
-        self.frame3.grid_propagate(False)
-        self.frames.append(self.frame3)
+        #self.log_frame = tk.LabelFrame(self.right_frame, text="Log")
+        #self.log_frame.grid(row=1, column=0, sticky=tk.W+tk.E+tk.N+tk.S,
+        #    **self.pad0.get("se")
+        #self.frames.append(self.log_frame)
         
         # Create logging text box and divert sys.stdout to it
-        self.log_t = tk.Text(self.frame3, bg='black', fg="white")
-        self.log_t.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S,
-            padx=(pad1, pad1), pady=(pad1, pad1))
-        sys.stdout = StdoutDirector(self.log_t)
+        #self.log_t = tk.Text(self.log_frame, bg='black', fg="white", width=4, 
+        #    height=10)
+        #self.log_t.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S,
+        #    **self.pad1.get("n", "xx", True))
+        #sys.stdout = StdoutDirector(self.log_t)
 
         #-End of UI layout ---------------------------------------------------#
 
-        # Formatting ---------------------------------------------------------#
-        self.stretch_grid(self)
+        # Additional initialization
+        self.on_proc_mode() # Init out_res_le buffers
+
+        # Formatting 
+        stretch_grid(self)
         for frame in self.frames :
-            self.stretch_grid(frame)
+            stretch_grid(frame, minrowsize=25, mincolumnsize=25)
 
     #-Start of class methods -------------------------------------------------#
 
-    def load_image(self) :
+    # Methods are in order of appearance in the UI (top-bottom, left-right)
+    # rather than alphabetical
+
+    def on_load_image(self) :
         # Load image
         previous_filename = self.input_canvas.filename
+        try :
+            old_x = self.input_canvas.image_no_zoom_PIL.width
+        except :
+            old_x = 0
+        try :
+            old_y = self.input_canvas.image_no_zoom_PIL.height
+        except :
+            old_y = 0
         self.input_canvas.load_draw_image()
+        new_x = self.input_canvas.image_no_zoom_PIL.width
+        new_y = self.input_canvas.image_no_zoom_PIL.height
 
         # Update output image resolution fields to default to input image size
-        # The update_in_progress flag is needed to avoid triggering 
-        # update_out_res_x and update_out_res_y when I load the image
-        if (self.input_canvas.filename != previous_filename) :
-            self.out_res_x_e.set_value(self.input_canvas.image_no_zoom_PIL.width)
-            self.out_res_y_e.set_value(self.input_canvas.image_no_zoom_PIL.height)
+        if (self.input_canvas.filename != previous_filename or 
+            (old_x != new_x or old_y != new_y)) :
+            self.update_all_res_entries(new_x, new_y)
         
-        # Start with locked aspect ratio after loading
-        self.aspect_ratio_b_status = 1
-        self.aspect_ratio_b.config(image=self.aspect_ratio_i_lock)
+        # Toggle aspect ratio locks on after loading
+        self.resize_res_le.aspect_ratio_b.toggle_on()
+        self.crop_res_le.aspect_ratio_b.toggle_on()
+        self.out_res_le.aspect_ratio_b.toggle_on()
 
-    def toggle_selection_tool(self) :
+    def on_open_resize(self) :
+        # First, close the cropping tool if open
+        if self.open_crop_b.toggled :
+            self.on_open_crop() 
+
+        self.open_resize_b.on_toggle_change()
+        if self.open_resize_b.toggled :
+            self.resize_frame.grid(row=1, column=1, rowspan=3, columnspan=4,
+                sticky=tk.W+tk.E+tk.N+tk.S, **self.pad1.get("w", "xx", True))
+        else :
+            self.resize_frame.grid_forget()
+
+    def on_resize(self) :
+        if not self.resize_res_le.valid() :
+            print("Cannot resize image because of invalid target resolution")
+            return
+        x = self.resize_res_le.x_e.value
+        y = self.resize_res_le.y_e.value
+        self.input_canvas.resize_image(x, y, self.interp_mode_sv.get())
+        self.update_all_res_entries(x, y)
+        self.update_undo_b()
+
+    def on_undo_resize(self) :
+        if self.input_canvas.undo_buffer :
+            x = self.input_canvas.undo_buffer.width
+            y = self.input_canvas.undo_buffer.height
+            self.update_all_res_entries(x, y)
+        self.input_canvas.undo()
+        self.update_undo_b()
+
+    def on_open_crop(self) :
+        # First, close the resize tool if open
+        if self.open_resize_b.toggled :
+            self.on_open_resize() 
+
+        self.open_crop_b.on_toggle_change()
+        if self.open_crop_b.toggled :
+            self.crop_frame.grid(row=1, column=1, rowspan=3, columnspan=4,
+                sticky=tk.W+tk.E+tk.N+tk.S, **self.pad1.get("w", "xx", True))
+        else :
+            # When closing the crop window, make sure to delete any selections
+            if self.selection_tool_b.toggled :
+                self.on_selection_tool()
+            self.input_canvas.delete_selection_rectangle()
+            self.crop_frame.grid_forget()
+
+    def on_selection_tool(self) :
         self.selection_tool_b.on_toggle_change()
-        if not self.selection_tool_b.toggled :
-            self.input_canvas.delete_selection()
+        if self.selection_tool_b.toggled :
+            self.crop_res_le.disable()
+        else :
+            self.crop_res_le.enable()
+            self.input_canvas.delete_selection_rectangle()
 
-    def save_image(self) :
-        # If an output exists
-        if self.output_canvas.image_id != -1 :
+    def on_crop(self) :
+        selection_box = None
+        flag = False
+        if self.selection_tool_b.toggled :
+            selection_box = tuple(
+                self.input_canvas.selection_rectangle.coords_rel_scaled)
+            self.on_selection_tool()
+        if selection_box :
+            self.input_canvas.crop_image(box=selection_box)
+            flag = True
+        else :
+            if not self.crop_res_le.valid() :
+                print("Cannot crop because of invalid resolution")
+                return
+            x = self.crop_res_le.x_e.value
+            y = self.crop_res_le.y_e.value
+            if (x < self.input_canvas.image_no_zoom_PIL.width or 
+                y < self.input_canvas.image_no_zoom_PIL.height) :
+                self.input_canvas.crop_image(anchor=self.crop_anchor_sv.get(),
+                    size=(x,y))
+                flag = True
+        if flag :
+            self.update_undo_b()
+            x = self.input_canvas.image_no_zoom_PIL.width
+            y = self.input_canvas.image_no_zoom_PIL.height
+            self.update_all_res_entries(x, y)
+
+    def on_undo_crop(self) :
+        if self.input_canvas.undo_buffer :
+            x = self.input_canvas.undo_buffer.width
+            y = self.input_canvas.undo_buffer.height
+            self.update_all_res_entries(x, y)
+        self.input_canvas.undo()
+        self.update_undo_b()
+
+    def on_proc_mode(self, *args) :
+        row_name = "Number of palettes"
+        row_n = self.ctrl_rows[row_name]
+
+        mode = self.proc_mode_sv.get()
+        if mode == self.image_processor.default_mode_name :
+            self.palettes_n_l.grid_forget()
+            self.palettes_n_e.grid_forget()
+            self.tile_size_l.grid_forget()
+            self.tile_size_e_x.grid_forget()
+            self.tile_size_e_y.grid_forget()
+            self.out_res_le.l.config(text="Ouput resolution")
+            self.out_res_le.reset_from_buffer()
+        elif mode == self.image_processor.tiled_mode_name :
+            row_name = "Number of palettes"
+            row_n = self.ctrl_rows[row_name]
+            self.palettes_n_l.grid(row=row_n, column=0,
+                sticky=tk.W+tk.E, **self.pad1.get("w"))
+            self.palettes_n_e.grid(row=row_n, column=1, columnspan=3,
+            sticky=tk.W+tk.E, **self.pad1.get("e"))
+            row_name = "Tile size"
+            row_n = self.ctrl_rows[row_name]
+            self.tile_size_l.grid(row=row_n, column=0,
+                sticky=tk.W+tk.E, **self.pad1.get("w"))
+            self.tile_size_e_x.grid(row=row_n, column=1,
+                sticky=tk.W+tk.E, **self.pad1.get("c"))
+            self.tile_size_e_y.grid(row=row_n, column=3,
+                sticky=tk.W+tk.E, **self.pad1.get("e"))
+            self.out_res_le.l.config(text= "Ouput resolution (tiles)")
+            self.out_res_le.set_buffer()
+            if (self.out_res_le.valid() and self.tile_size_e_x.valid and 
+                self.tile_size_e_y.valid) :
+                x = int(np.floor(
+                    self.out_res_le.x_e.value/self.tile_size_e_x.value))
+                y = int(np.floor(
+                    self.out_res_le.y_e.value/self.tile_size_e_y.value))
+                self.out_res_le.set(x, y)
+    
+    def on_write_pixel_size(self, *args) :
+        self.pixel_size_e.on_write(args)
+        self.update_save_resolution()
+
+    def on_save_image(self) :
+        if self.output_canvas.image_id :
             if not self.pixel_size_e.valid :
                 print("Cannot save output because of invalid pixel size")
                 return
             pixel_size = self.pixel_size_e.value
+            file_exists = True
+            filename = ""
+            extension=".png"
+            i = 0
+            while file_exists :
+                filename = self.input_canvas.filename+"_VIMPRO_"+str(
+                    i)+extension
+                file_exists = os.path.exists(
+                    self.input_canvas.filepath+filename)
+                i+=1
             file = asksaveasfile(mode='w', defaultextension=".png",
-                initialfile=self.input_canvas.filename+"_out",
-                filetypes=[("PNG image file", ".png")],)
+                initialfile=filename, filetypes=[("PNG image file", ".png")],)
             if not file :
                 return
             output_image = self.output_canvas.image_no_zoom_PIL.copy()
@@ -765,112 +1595,89 @@ class Application(tk.Tk) :
                 resample=Image.NEAREST) 
             output_image.save(file.name)
 
-    # Update out_res_y to be consistent with the current out_res_x if
-    # the locked aspect ratio is toggled
-    def update_complementary_out_res_x(self) :
-        self.update_in_progress = True
-        if (self.input_canvas.image_aspect_ratio != 0.0 and
-            self.aspect_ratio_b_status == 1) :
-            new_y = int(self.out_res_x_e.value/
-                self.input_canvas.image_aspect_ratio)
-            self.out_res_y_e.set_value(new_y)
-        self.update_final_resolution()
-        self.update_in_progress = False
+    def on_main_window_resize(self, *args) :
+        pass
 
-    # Update out_res_x to be consistent with the current out_res_y if
-    # the locked aspect ratio is toggled
-    def update_complementary_out_res_y(self) :
-        self.update_in_progress = True
-        if (self.input_canvas.image_aspect_ratio != 0.0 and 
-            self.aspect_ratio_b_status == 1) :
-            new_x = int(self.out_res_y_e.value*
-                self.input_canvas.image_aspect_ratio)
-            self.out_res_x_e.set_value(new_x)
-        self.update_final_resolution()
-        self.update_in_progress = False  
-
-    def update_out_res_x(self, *args) :
-        if self.update_in_progress :
-            return
-        old_x = self.out_res_x_e.value
-        self.out_res_x_e.on_write(args)
-        if not self.out_res_x_e.valid :
-            return
-        if self.out_res_x_e.value != old_x :
-            self.last_modified_out_res = "x"
-        self.update_complementary_out_res_x()
-
-    def update_out_res_y(self, *args) :
-        if self.update_in_progress :
-            return
-        old_y = self.out_res_y_e.value
-        self.out_res_y_e.on_write(args)
-        if not self.out_res_y_e.valid :
-            return
-        if self.out_res_y_e.value != old_y :
-            self.last_modified_out_res = "y"
-        self.update_complementary_out_res_y()
-
-    def toggle_aspect_ratio(self):
-        if self.aspect_ratio_b_status == 0:
-            self.aspect_ratio_b_status = 1
-            self.aspect_ratio_b.config(image=self.aspect_ratio_i_lock)
-            
-            # Update resolution after enabling aspect ratio lock
-            if self.last_modified_out_res == "x" :
-                self.update_complementary_out_res_x()
-            elif self.last_modified_out_res == "y" :
-                self.update_complementary_out_res_y()
-        else:
-            self.aspect_ratio_b_status = 0
-            self.aspect_ratio_b.config(image=self.aspect_ratio_i_ulock)
-        self.update_final_resolution()
-
-    def update_pixel_size(self, *args) :
-        self.pixel_size_e.on_write(args)
-        self.update_final_resolution()
-
-    def update_final_resolution(self) :
-        if not self.pixel_size_e.valid :
-            return
-        pixel_size = self.pixel_size_e.value
-        self.final_out_res_sv.set(str(int(pixel_size*self.out_res_x_e.value))+
-            " x "+str(int(pixel_size*self.out_res_y_e.value)))
+    # From here on, the ordering is alphabetical
 
     def process_image(self) :
-        if self.input_canvas.image_id == -1 :
+        mode =self.proc_mode_sv.get()
+
+        # Check input data validity
+        if not self.input_canvas.image_id :
             print("Cannot run processor because no input image loaded")
             return
-        self.image_processor.n_colors = self.colors_e.value
-        if not self.colors_e.valid :
-            print("Cannot run processor because of invalid number of colors")
+        if not self.palette_size_e.valid :
+            print("Cannot run processor because of invalid color palette size")
             return
-        self.image_processor.out_res_x = self.out_res_x_e.value
-        self.image_processor.out_res_y = self.out_res_y_e.value
-        if (not self.out_res_x_e.valid or not self.out_res_y_e.valid) :
+        if not self.out_res_le.valid() :
             print("Cannot run processor because of invalid resolution")
             return
-        self.image_processor.bits_R = self.bits_R_e.value
-        self.image_processor.bits_G = self.bits_G_e.value
-        self.image_processor.bits_B = self.bits_B_e.value
         if (not self.bits_R_e.valid or not self.bits_G_e.valid or not 
             self.bits_B_e.valid) :
             print("Cannot run processor because of invalid RGB channel bits")
             return
-        self.image_processor.fidelity = self.fidelity_e.get()
-        self.image_processor.process_image()
+        if mode != self.image_processor.default_mode_name :
+            if not self.palettes_n_e.valid :
+                print("Cannot run processor because of invalid number of \
+                    palettes")
+            if not (self.tile_size_e_x.valid or not self.tile_size_e_y.valid) :
+                print("Cannot run processor because of invalid tile size")
+        # Get input data. Note that everything here is an IntEntry object, 
+        # which implements the value attribute. Fidelity isn't, so I use get
+        palettes_n=self.palettes_n_e.value
+        palette_size = self.palette_size_e.value
+        rgb_bits = [self.bits_R_e.value, self.bits_G_e.value, 
+            self.bits_B_e.value]
+        fidelity = self.fidelity_e.get()
+        tile_x = self.tile_size_e_x.value
+        tile_y = self.tile_size_e_y.value
+        out_x = self.out_res_le.x_e.value
+        out_y = self.out_res_le.y_e.value
 
-    def stretch_grid(self, obj) :
-        col_count, row_count = obj.grid_size()
-        for col in range(col_count):
-            obj.grid_columnconfigure(col, weight=1, minsize=0)
-        for row in range(row_count):
-            obj.grid_rowconfigure(row, weight=1, minsize=0)
+        # Run processor
+        self.image_processor.process(mode=mode, npalettes=palettes_n,
+            palettesize=palette_size, rgbbits=rgb_bits, fidelity=fidelity, 
+            tilesize=(tile_x, tile_y), outx=out_x, outy=out_y)
 
-    def on_resize(self, event) :
-        pass
+        # Update output resolution of the possible save file
+        self.update_save_resolution()
+
+    def update_all_res_entries(self, x, y) :
+        self.resize_res_le.set(x, y)
+        self.crop_res_le.x_e.set_max_value(x)
+        self.crop_res_le.y_e.set_max_value(y)
+        self.crop_res_le.set(x, y)
+        self.out_res_le.set(x, y)
+        # Set max values on the cropping field to prevent useless cropping when
+        # the target crop resolution is larger than the current image
+        # resolution
         
+    def update_save_resolution(self) :
+        if not self.pixel_size_e.valid :
+            return
+        pixel_size = self.pixel_size_e.value
+        x = 0
+        y = 0
+        try :
+            x = self.output_canvas.image_no_zoom_PIL.width
+            y = self.output_canvas.image_no_zoom_PIL.height
+        except :
+            pass # Not good practice, I know, but I really an info-less except
+        self.save_res_sv.set(str(int(pixel_size*x))+
+            " x "+str(int(pixel_size*y)))
+
+    def update_undo_b(self) :
+        if not self.input_canvas.undo_buffer :
+            self.undo_resize_b.config(state=tk.DISABLED)
+            self.undo_crop_b.config(state=tk.DISABLED)
+        else :
+            self.undo_resize_b.config(state=tk.NORMAL)
+            self.undo_crop_b.config(state=tk.NORMAL)
+
+###############################################################################
 ### MAIN ######################################################################
+###############################################################################
 
 if __name__ == "__main__":
 
