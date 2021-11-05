@@ -383,7 +383,8 @@ class ImageProcessor :
                 target_height = width/target_aspect_ratio
                 delta_height = int((height-target_height)/2)
                 border = (0, delta_height, width, height-delta_height)
-        return im.crop(border)
+            im = im.crop(border)
+        return im
 
     def process_default(self, **kwargs) :
         palette_size = kwargs["palettesize"]
