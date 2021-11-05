@@ -312,7 +312,7 @@ class ImageProcessor :
     def __init__(self, input_canvas, output_canvas) :
         self.input_canvas = input_canvas
         self.output_canvas = output_canvas
-        self.max_pixels = 48*48
+        self.max_pixels = 128*128
         self.default_mode_name = "Default"
         self.tiled_mode_name = "Tiled"
         self.GBC_mode_name = "Game Boy Color"
@@ -374,7 +374,6 @@ class ImageProcessor :
     def crop(self, im, target_aspect_ratio) :
         width, height = im.size
         aspect_ratio = width/height
-        target_aspect_ratio
         if abs((target_aspect_ratio-aspect_ratio)/target_aspect_ratio) > 0.01 :
             if aspect_ratio > target_aspect_ratio :
                 target_width = height*target_aspect_ratio
@@ -384,8 +383,7 @@ class ImageProcessor :
                 target_height = width/target_aspect_ratio
                 delta_height = int((height-target_height)/2)
                 border = (0, delta_height, width, height-delta_height)
-            im = im.crop(border)
-        return im.convert("RGB")
+        return im.crop(border)
 
     def process_default(self, **kwargs) :
         palette_size = kwargs["palettesize"]
@@ -484,9 +482,11 @@ class ImageProcessor :
         # Determine best palette for each tile. This is done or downsampled
         # tiles of 8x8 to improve performance
         best_palettes = []
-        max_tile_pixels = 8*8
+        max_tile_pixels = 16*16
         start_time = time.time()
+        out = np.empty((0, out_x, 3))
         for j in range(out_t_y) :
+            hout = np.empty((t_y, 0, 3))
             for i in range(out_t_x) :
                 I = i*t_x
                 J = j*t_y
@@ -497,20 +497,22 @@ class ImageProcessor :
                 if (n_pixels > max_tile_pixels) :
                     scale = np.sqrt(max_tile_pixels/n_pixels)
                     proc_tile = proc_tile.resize((int(tile.width*scale), 
-                        int(tile.height*scale)), resample=Image.NEAREST)
+                        int(tile.height*scale)), resample=Image.LANCZOS)
                 data = np.array(proc_tile)
-                data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
-                best_palette = self.best_palette_avg_norm(data, palettes)
+                best_palette = self.best_palette_avg_norm(
+                    data.reshape(data.shape[0]*data.shape[1], data.shape[2]),
+                    palettes)
                 data = np.array(tile)
-                data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
-                for q, item in enumerate(data) :
-                    dists = np.linalg.norm((item-best_palette), axis=1)
-                    mini = np.argmin(dists, axis=0)
-                    output_data[int(J+np.floor(q/t_x))][int(I+q%t_x)] = \
-                        best_palette[mini]
+                orig_shape = data.shape
+                self.replace_from_palette(
+                    data.reshape(data.shape[0]*data.shape[1], data.shape[2]),
+                    best_palette)
+                data = data.reshape(orig_shape)
+                hout = np.hstack((hout, data))
+            out = np.vstack((out, hout))
         print("Dt substitution =", (time.time()-start_time))
         
-        output_image = Image.fromarray(output_data)
+        output_image = Image.fromarray(out.astype(np.uint8))
         self.output_canvas.set_zoom_draw_image(output_image)
 
     def process(self, **kwargs) :
