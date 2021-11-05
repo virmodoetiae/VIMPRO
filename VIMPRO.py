@@ -220,12 +220,18 @@ class KMeans :
         self.print_info = kwargs.get("printinfo", False)
         
         self.run()
+
+    def force_means_size(self) :
+        # Force size of k on self.means
+        self.means = np.unique(np.rint(self.means), axis=0)
+        while self.means.shape[0] < self.k :
+            self.means = np.vstack([self.means, self.means[-1]])
         
     def run(self) :
         # Do nothing if data smaller than k
         if self.n <= self.k :
             self.means = self.data
-            self.correct_means()
+            self.force_means_size()
             return
 
         if self.print_info :
@@ -251,7 +257,7 @@ class KMeans :
                 not_converged = False
             i+=1
 
-        self.correct_means()
+        self.force_means_size()
 
         if self.print_info :
             print("Final k-means performance (iters/res):", i,
@@ -290,12 +296,6 @@ class KMeans :
             self.means[i] = new_mean
 
         return epsilon
-
-    def correct_means(self) :
-        # Force size of k (maybe unnecessary?)
-        self.means = np.unique(np.rint(self.means), axis=0)
-        while self.means.shape[0] < self.k :
-            self.means = np.vstack([self.means, self.means[-1]])
 
     def sample_from_data(self) :
         while True :
@@ -342,24 +342,6 @@ class ImageProcessor :
             return palettes[np.argmin(palettes_sum_norm)]
         return palettes[0]
 
-    def replace_from_palette(self, data, palette) :
-        # First, construct argmin_dists which is a 1-D array of size 
-        #data.shape[0] wherein each element consists of the index of the 
-        # corresponding palette color that best approximates the corresponding
-        # element in data
-        dists = np.zeros((data.shape[0], 0))
-        for i, palette_color in enumerate(palette) :
-            d = np.linalg.norm((palette_color-data), axis=1)
-            dists = np.insert(dists, i, d, axis=1)
-        argmin_dists = np.argmin(dists, axis=1)
-        # Now, do the actual substitution in data. Would be great if I could
-        # rid of the second for, but oh, for now it's fine
-        for i, palette_color in enumerate(palette) :
-            indices = np.where(argmin_dists == i)[0]*palette_color.shape[0]
-            for j in range(palette_color.shape[0]) :
-                data.put((indices+j), palette_color[j])
-        return data
-
     def convert_color_bits(self, array, rgb_bits, unique=False) :
         if rgb_bits == [16, 16, 16] :
             return array
@@ -385,6 +367,24 @@ class ImageProcessor :
                 border = (0, delta_height, width, height-delta_height)
             im = im.crop(border)
         return im
+
+    def replace_from_palette(self, data, palette) :
+        # First, construct argmin_dists which is a 1-D array of size 
+        #data.shape[0] wherein each element consists of the index of the 
+        # corresponding palette color that best approximates the corresponding
+        # element in data
+        dists = np.zeros((data.shape[0], 0))
+        for i, palette_color in enumerate(palette) :
+            d = np.linalg.norm((palette_color-data), axis=1)
+            dists = np.insert(dists, i, d, axis=1)
+        argmin_dists = np.argmin(dists, axis=1)
+        # Now, do the actual substitution in data. Would be great if I could
+        # rid of the second for, but oh, for now it's fine
+        for i, palette_color in enumerate(palette) :
+            indices = np.where(argmin_dists == i)[0]*palette_color.shape[0]
+            for j in range(palette_color.shape[0]) :
+                data.put((indices+j), palette_color[j])
+        return data
 
     def process_default(self, **kwargs) :
         palette_size = kwargs["palettesize"]
@@ -1434,6 +1434,8 @@ class Application(tk.Tk) :
         if (self.input_canvas.filename != previous_filename or 
             (old_x != new_x or old_y != new_y)) :
             self.update_all_res_entries(new_x, new_y)
+            self.out_res_le.set_buffer()
+            self.on_proc_mode()
         
         # Toggle aspect ratio locks on after loading
         self.resize_res_le.aspect_ratio_b.toggle_on()
