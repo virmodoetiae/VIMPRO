@@ -236,12 +236,12 @@ class KMeans :
 
         if self.print_info :
             print("Running k-means with target residual:", 
-                self.min_rel_epsilon)
+                '{:.3E}'.format(self.min_rel_epsilon))
 
         # Initialize means randomly
         while self.means.shape[0] < self.k :
             self.means = np.vstack([self.means, self.sample_from_data()])
-
+        
         # Run the k-means iterations
         i = 0
         not_converged = True
@@ -299,8 +299,10 @@ class KMeans :
 
     def sample_from_data(self) :
         while True :
-            new_mean = self.data[np.random.randint(0, self.n-1)]
-            if new_mean not in self.means :
+            new_mean = self.data[np.random.randint(0, self.n)]
+            
+            # I.e. "if new_mean not in self.means"
+            if not np.any(np.all((new_mean == self.means), axis=1)) :
                 return new_mean
 
 #-----------------------------------------------------------------------------#
