@@ -1,7 +1,7 @@
 ###############################################################################
 ##                                                                           ##
-##             _________________________________    _________   _________    ##
-##            // ____  _____  _________________/   // ____  /  // ____  /    ##
+##             ________________________________     _________   _________    ##
+##            // ____  ____  _________________/    // ____  /  // ____  /    ##
 ##           // /  // /  // /                     // /  // /  // /  // /     ##
 ##          // /  // /  // /_____  _________     // /__// /__//_/__// /      ##
 ##         // /  // /  // ______/ // ______/    // __________________/       ##
@@ -33,9 +33,9 @@ import VIMPRO_Tkinter as vk
 interpolation_modes = {"Bilinear" : Image.BILINEAR, "Bicubic" : Image.BICUBIC,
     "Nearest" : Image.NEAREST, "Lanczos" : Image.LANCZOS}
 
-anchor_points = {"Center" : "c", "Top" : "n", "Top-left" : "ne", "Left" : "e", 
-    "Bottom-left" : "se", "Bottom" : "s", "Bottom-right" : "sw",
-    "Right" : "w", "Top-right" : "nw"}
+anchor_points = {"Center" : "c", "Top" : "n", "Top-right" : "ne", "Right" : "e", 
+    "Bottom-right" : "se", "Bottom" : "s", "Bottom-left" : "sw",
+    "Left" : "w", "Top-left" : "nw"}
 
 ### FUNCTIONS #################################################################
 
@@ -118,11 +118,12 @@ class GUI(tk.Tk) :
         n_cols = 5
         self.ctrl_rows = {"Input options" : 0, "Load image" : 1, 
             "Resize tool" : 2, "Crop tool" : 3, "Processing options" : 4, 
-            "Mode" : 5, "Number of palettes" : 6, "Palette size" : 7, 
-            "Bits per channel (R,G,B)" : 8, "Fidelity" : 9, "Tile size" : 10,
-            "Output resolution" : 11, "Process image" : 12, 
-            "Save options" : 13, "Pixel size" : 14, "Final resolution" : 15,
-            "Save image" : 16}
+            "Processor mode" : 5,  "Compatibility mode" : 6, 
+            "Palettes search grid" : 7, "Palette size" : 8, 
+            "Bits per channel (R,G,B)" : 9, "Fidelity" : 10, "Tile size" : 11,
+            "Output resolution" : 12, "Process image" : 13, 
+            "Save options" : 14, "Pixel size" : 15, "Final resolution" : 16,
+            "Save image" : 17}
 
         # Input options ------------------------------------------------------#
         row_name = "Input options"
@@ -253,14 +254,18 @@ class GUI(tk.Tk) :
             padx=self.label_width, sticky=tk.W)
 
         # Number of palettes -------------#
-        row_name = "Number of palettes"
+        row_name = "Palettes search grid"
         row_n = self.ctrl_rows[row_name]
-        self.palettes_n_l = tk.Label(self.ctrl_frame, text=row_name, 
+        self.palettes_grid_l = tk.Label(self.ctrl_frame, text=row_name, 
             anchor=tk.W)
-        self.palettes_n_e = vk.IntEntry(self.ctrl_frame, 
+        self.palettes_grid_x_e = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
-        self.palettes_n_e.set_min_value(1)
-        self.palettes_n_e.set_value(8)
+        self.palettes_grid_x_e.set_min_value(1)
+        self.palettes_grid_x_e.set_value(2)
+        self.palettes_grid_y_e = vk.IntEntry(self.ctrl_frame, 
+            width=self.entry_width)
+        self.palettes_grid_y_e.set_min_value(1)
+        self.palettes_grid_y_e.set_value(4)
 
         # Processor mode -------------#
         # This should come first, but the option menu needs to be tied to
@@ -270,19 +275,34 @@ class GUI(tk.Tk) :
         # create proc_mode_om until after I have created all the
         # entries/labels that are referenced by the command. Thus, proc_mode
         # is created at the end
-        row_name = "Mode"
+        row_name = "Processor mode"
         row_n = self.ctrl_rows[row_name]
         proc_mode_l = tk.Label(self.ctrl_frame, text=row_name)
         proc_mode_l.grid(row=row_n, column=0, sticky=tk.W,
             **self.pad1.get("w"))
 
-        self.prev_mode = None
+        self.prev_proc_mode = None
         self.proc_mode_sv = tk.StringVar()
-        self.proc_mode_sv.set("Default")
+        self.proc_mode_sv.set(self.image_processor.proc_modes[0])
         self.proc_mode_om = ttk.OptionMenu(self.ctrl_frame, self.proc_mode_sv,
-            self.image_processor.modes[0], *self.image_processor.modes,
-            command=self.on_proc_mode)
+            self.image_processor.proc_modes[0], 
+            *self.image_processor.proc_modes, command=self.on_proc_mode)
         self.proc_mode_om.grid(row=row_n, column=1, columnspan=3,
+            sticky=tk.W+tk.E, **self.pad1.get("e"))
+
+        # Compatibility mode
+        row_name = "Compatibility mode"
+        row_n = self.ctrl_rows[row_name]
+        comp_mode_l = tk.Label(self.ctrl_frame, text=row_name)
+        comp_mode_l.grid(row=row_n, column=0, sticky=tk.W,
+            **self.pad1.get("w"))
+
+        self.comp_mode_sv = tk.StringVar()
+        self.comp_mode_sv.set(self.image_processor.comp_modes[0])
+        self.comp_mode_om = ttk.OptionMenu(self.ctrl_frame, self.comp_mode_sv,
+            self.image_processor.comp_modes[0], 
+            *self.image_processor.comp_modes, command=self.on_comp_mode)
+        self.comp_mode_om.grid(row=row_n, column=1, columnspan=3,
             sticky=tk.W+tk.E, **self.pad1.get("e"))
 
         # Palette size ---------------#
@@ -417,6 +437,8 @@ class GUI(tk.Tk) :
 
         # Add functionality at the end to avoid potential issues regarding
         # referencing missing variables
+        self.tile_size_e_x.trace_add("write", self.on_write_tile_size_x)
+        self.tile_size_e_y.trace_add("write", self.on_write_tile_size_y)
         self.pixel_size_e.trace_add("write", self.on_write_pixel_size)
 
         #---------------------------------------------------------------------#
@@ -460,20 +482,29 @@ class GUI(tk.Tk) :
         except :
             old_y = 0
         self.input_canvas.load_draw_image()
-        new_x = self.input_canvas.image_no_zoom_PIL.width
-        new_y = self.input_canvas.image_no_zoom_PIL.height
+        # If an image was actually loaded (it might be that the user just
+        # closed the window without loading anything)
+        if self.input_canvas.image :
+            new_x = self.input_canvas.image_no_zoom_PIL.width
+            new_y = self.input_canvas.image_no_zoom_PIL.height
 
-        # Update output image resolution fields to default to input image size
-        if (self.input_canvas.filename != previous_filename or 
-            (old_x != new_x or old_y != new_y)) :
-            self.update_all_res_entries(new_x, new_y)
-            self.out_res_le.set_buffer()
-            self.on_proc_mode()
-        
-        # Toggle aspect ratio locks on after loading
-        self.resize_res_le.aspect_ratio_b.toggle_on()
-        self.crop_res_le.aspect_ratio_b.toggle_on()
-        self.out_res_le.aspect_ratio_b.toggle_on()
+            # Update output image resolution fields to default to input image
+            # size
+            if (self.input_canvas.filename != previous_filename or 
+                (old_x != new_x or old_y != new_y)) :
+                self.update_all_res_entries(new_x, new_y)
+                self.out_res_le.set_buffer()
+                
+                # Reset to none so that the correct resolution is initially set
+                # in out_res if the image was loaded with the Tiled processor
+                # mode already selected
+                self.prev_proc_mode = None
+                self.on_proc_mode()
+            
+            # Toggle aspect ratio locks on after loading
+            self.resize_res_le.aspect_ratio_b.toggle_on()
+            self.crop_res_le.aspect_ratio_b.toggle_on()
+            self.out_res_le.aspect_ratio_b.toggle_on()
 
     def on_open_resize(self) :
         # First, close the cropping tool if open
@@ -486,6 +517,8 @@ class GUI(tk.Tk) :
                 sticky=tk.W+tk.E+tk.N+tk.S, **self.pad1.get("w", "xx", True))
         else :
             self.resize_frame.grid_forget()
+            self.resize_res_le.set(self.input_canvas.image_no_zoom_PIL.width,
+                self.input_canvas.image_no_zoom_PIL.height)
 
     def on_resize(self) :
         if not self.resize_res_le.valid() :
@@ -496,15 +529,21 @@ class GUI(tk.Tk) :
         self.input_canvas.resize_image(x, y, 
             interpolation_modes[self.interp_mode_sv.get()])
         self.update_all_res_entries(x, y)
+        self.out_res_le.set_buffer()
         self.update_undo_b()
+        self.prev_proc_mode = None
+        self.on_proc_mode()
 
     def on_undo_resize(self) :
         if self.input_canvas.undo_buffer :
             x = self.input_canvas.undo_buffer.width
             y = self.input_canvas.undo_buffer.height
             self.update_all_res_entries(x, y)
+            self.out_res_le.set_buffer()
         self.input_canvas.undo()
         self.update_undo_b()
+        self.prev_proc_mode = None
+        self.on_proc_mode()
 
     def on_open_crop(self) :
         # First, close the resize tool if open
@@ -521,6 +560,8 @@ class GUI(tk.Tk) :
                 self.on_selection_tool()
             self.input_canvas.delete_selection_rectangle()
             self.crop_frame.grid_forget()
+            self.crop_res_le.set(self.input_canvas.image_no_zoom_PIL.width,
+                self.input_canvas.image_no_zoom_PIL.height)
 
     def on_selection_tool(self) :
         self.selection_tool_b.on_toggle_change()
@@ -548,62 +589,141 @@ class GUI(tk.Tk) :
             y = self.crop_res_le.y_e.value
             if (x < self.input_canvas.image_no_zoom_PIL.width or 
                 y < self.input_canvas.image_no_zoom_PIL.height) :
-                self.input_canvas.crop_image(anchor=self.crop_anchor_sv.get(),
-                    size=(x,y))
+                self.input_canvas.crop_image(anchor=anchor_points[
+                    self.crop_anchor_sv.get()], size=(x,y))
                 flag = True
         if flag :
             self.update_undo_b()
             x = self.input_canvas.image_no_zoom_PIL.width
             y = self.input_canvas.image_no_zoom_PIL.height
             self.update_all_res_entries(x, y)
+            self.out_res_le.set_buffer()
+            self.prev_proc_mode = None
+            self.on_proc_mode()
 
     def on_undo_crop(self) :
         if self.input_canvas.undo_buffer :
             x = self.input_canvas.undo_buffer.width
             y = self.input_canvas.undo_buffer.height
             self.update_all_res_entries(x, y)
+            self.out_res_le.set_buffer()
         self.input_canvas.undo()
         self.update_undo_b()
+        self.prev_proc_mode = None
+        self.on_proc_mode()
 
-    def on_proc_mode(self, *args) :
-        row_name = "Number of palettes"
+    def on_proc_mode(self, *args, **kwargs) :
+        row_name = "Palettes search grid"
         row_n = self.ctrl_rows[row_name]
 
-        mode = self.proc_mode_sv.get()
-        if self.prev_mode != mode :
-            if mode == self.image_processor.default_mode_name :
-                self.palettes_n_l.grid_forget()
-                self.palettes_n_e.grid_forget()
+        set_out_res_buffer = kwargs.get("setoutresbuffer", True)
+
+        comp_mode = self.comp_mode_sv.get()
+        proc_mode = self.proc_mode_sv.get()
+        if (self.prev_proc_mode != proc_mode) :
+            if proc_mode == self.image_processor.default_proc_mode_name :
+                self.palettes_grid_l.grid_forget()
+                self.palettes_grid_x_e.grid_forget()
+                self.palettes_grid_y_e.grid_forget()
                 self.tile_size_l.grid_forget()
                 self.tile_size_e_x.grid_forget()
                 self.tile_size_e_y.grid_forget()
                 self.out_res_le.l.config(text="Ouput resolution")
-                self.out_res_le.reset_from_buffer()
-            elif mode == self.image_processor.tiled_mode_name :
-                row_name = "Number of palettes"
+                if comp_mode == self.image_processor.GBC_comp_mode_name :
+                    self.tile_size_e_y.set_max_value(148)
+                    self.tile_size_e_x.set_max_value(160)
+                    self.out_res_le.set(160, 148)
+                else :
+                    self.out_res_le.x_e.unset_max_value()
+                    self.out_res_le.y_e.unset_max_value()    
+                    self.out_res_le.reset_from_buffer()
+            elif proc_mode == self.image_processor.tiled_proc_mode_name :
+                row_name = "Palettes search grid"
                 row_n = self.ctrl_rows[row_name]
-                self.palettes_n_l.grid(row=row_n, column=0,
+                self.palettes_grid_l.grid(row=row_n, column=0,
                     sticky=tk.W+tk.E, **self.pad1.get("w"))
-                self.palettes_n_e.grid(row=row_n, column=1, columnspan=3,
-                sticky=tk.W+tk.E, **self.pad1.get("e"))
+                self.palettes_grid_x_e.grid(row=row_n, column=1,
+                    sticky=tk.W+tk.E, **self.pad1.get("e"))
+                self.palettes_grid_y_e.grid(row=row_n, column=2,
+                    sticky=tk.W+tk.E, **self.pad1.get("e"))
                 row_name = "Tile size"
                 row_n = self.ctrl_rows[row_name]
                 self.tile_size_l.grid(row=row_n, column=0,
                     sticky=tk.W+tk.E, **self.pad1.get("w"))
                 self.tile_size_e_x.grid(row=row_n, column=1,
                     sticky=tk.W+tk.E, **self.pad1.get("c"))
-                self.tile_size_e_y.grid(row=row_n, column=3,
+                self.tile_size_e_y.grid(row=row_n, column=2,
                     sticky=tk.W+tk.E, **self.pad1.get("e"))
                 self.out_res_le.l.config(text= "Ouput resolution (tiles)")
-                self.out_res_le.set_buffer()
-                if (self.out_res_le.valid() and self.tile_size_e_x.valid and 
-                    self.tile_size_e_y.valid) :
-                    x = int(np.floor(
-                        self.out_res_le.x_e.value/self.tile_size_e_x.value))
-                    y = int(np.floor(
-                        self.out_res_le.y_e.value/self.tile_size_e_y.value))
-                    self.out_res_le.set(x, y)
-        self.prev_mode = mode
+                if self.input_canvas.image :
+                    if set_out_res_buffer :
+                        self.out_res_le.set_buffer()
+                    if (self.out_res_le.valid() and self.tile_size_e_x.valid
+                        and self.tile_size_e_y.valid) :
+                        x = int(np.floor(self.out_res_le.x_e.value/
+                            self.tile_size_e_x.value))
+                        y = int(np.floor(self.out_res_le.y_e.value/
+                            self.tile_size_e_y.value))
+                        self.out_res_le.set(x, y)
+        self.prev_proc_mode = proc_mode
+
+    def on_comp_mode(self, *args) :
+        comp_mode = self.comp_mode_sv.get()
+        proc_mode = self.proc_mode_sv.get()
+        if (comp_mode == self.image_processor.GBC_comp_mode_name) :
+            self.palette_size_e.set_max_value(4)
+            self.tile_size_e_y.set_max_value(148)
+            self.tile_size_e_x.set_max_value(160)
+            self.out_res_le.set(160, 148)
+            if (proc_mode == self.image_processor.tiled_proc_mode_name) :
+                self.prev_proc_mode = None
+                self.on_proc_mode(setoutresbuffer=False)
+            elif (proc_mode == self.image_processor.default_proc_mode_name) :
+                pass
+        elif (comp_mode == self.image_processor.default_comp_mode_name) :
+            self.palette_size_e.unset_max_value()
+            self.tile_size_e_y.unset_max_value()
+            self.tile_size_e_x.unset_max_value()
+            self.out_res_le.x_e.unset_max_value()
+            self.out_res_le.y_e.unset_max_value()
+            self.out_res_le.reset_from_buffer()
+            if (proc_mode == self.image_processor.tiled_proc_mode_name) :
+                self.prev_proc_mode = None
+                self.on_proc_mode()
+            elif (proc_mode == self.image_processor.default_proc_mode_name) :
+                pass
+    '''
+    def on_proc_or_comp_mode(self, *args) :
+        comp_mode = self.comp_mode_sv.get()
+        proc_mode = self.proc_mode_sv.get()
+        if (comp_mode == self.image_processor.GBC_comp_mode_name) :
+            if (proc_mode == self.image_processor.tiled_proc_mode_name) :
+                pass 
+            elif (proc_mode == self.image_processor.default_proc_mode_name) :
+                pass
+        elif (comp_mode == self.image_processor.default_comp_mode_name) :
+            pass
+            if (proc_mode == self.image_processor.tiled_proc_mode_name) :
+                pass 
+            elif (proc_mode == self.image_processor.default_proc_mode_name) :
+                pass
+    '''
+    def on_write_tile_size_x(self, *args) :
+        self.out_res_le.set_tile_buffer(self.tile_size_e_x.value, 
+            self.tile_size_e_y.value)
+        self.tile_size_e_x.on_write()
+        x = int(self.out_res_le.tile_buffer[0]/
+                            self.tile_size_e_x.value)
+        self.out_res_le.set_x(x)
+
+    def on_write_tile_size_y(self, *args) :
+        self.out_res_le.set_tile_buffer(self.tile_size_e_x.value, 
+            self.tile_size_e_y.value)
+        self.tile_size_e_y.on_write()
+        y = int(self.out_res_le.tile_buffer[1]/
+                            self.tile_size_e_y.value)
+        x = self.out_res_le.x_e.value
+        self.out_res_le.set_y(y)
     
     def on_write_pixel_size(self, *args) :
         self.pixel_size_e.on_write(args)
@@ -623,7 +743,7 @@ class GUI(tk.Tk) :
     # From here on, the ordering is alphabetical
 
     def process_image(self) :
-        mode =self.proc_mode_sv.get()
+        proc_mode =self.proc_mode_sv.get()
 
         # Check input data validity
         if not self.input_canvas.image_id :
@@ -639,28 +759,28 @@ class GUI(tk.Tk) :
             self.bits_B_e.valid) :
             print("Cannot run processor because of invalid RGB channel bits")
             return
-        if mode != self.image_processor.default_mode_name :
-            if not self.palettes_n_e.valid :
+        if proc_mode != self.image_processor.default_proc_mode_name :
+            if not (self.palettes_grid_x_e.valid and 
+                self.palettes_grid_y_e.valid):
                 print("Cannot run processor because of invalid number of \
                     palettes")
             if not (self.tile_size_e_x.valid or not self.tile_size_e_y.valid) :
                 print("Cannot run processor because of invalid tile size")
         # Get input data. Note that everything here is an IntEntry object, 
         # which implements the value attribute. Fidelity isn't, so I use get
-        palettes_n=self.palettes_n_e.value
+        palettes_grid_size = (self.palettes_grid_x_e.value, 
+            self.palettes_grid_y_e.value)
         palette_size = self.palette_size_e.value
         rgb_bits = [self.bits_R_e.value, self.bits_G_e.value, 
             self.bits_B_e.value]
         fidelity = self.fidelity_e.get()
-        tile_x = self.tile_size_e_x.value
-        tile_y = self.tile_size_e_y.value
-        out_x = self.out_res_le.x_e.value
-        out_y = self.out_res_le.y_e.value
+        tile_size = (self.tile_size_e_x.value, self.tile_size_e_y.value)
+        out_size = (self.out_res_le.x_e.value, self.out_res_le.y_e.value)
 
         # Run processor
-        self.image_processor.process(mode=mode, npalettes=palettes_n,
-            palettesize=palette_size, rgbbits=rgb_bits, fidelity=fidelity, 
-            tilesize=(tile_x, tile_y), outx=out_x, outy=out_y)
+        self.image_processor.process(procmode=proc_mode, palettesgridsize=
+            palettes_grid_size, palettesize=palette_size, rgbbits=rgb_bits, 
+            fidelity=fidelity, tilesize=tile_size, outsize=out_size)
 
         # Update output resolution of the possible save file
         self.update_save_resolution()

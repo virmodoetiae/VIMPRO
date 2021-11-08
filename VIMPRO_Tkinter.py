@@ -1,7 +1,7 @@
 ###############################################################################
 ##                                                                           ##
-##             _________________________________    _________   _________    ##
-##            // ____  _____  _________________/   // ____  /  // ____  /    ##
+##             ________________________________     _________   _________    ##
+##            // ____  ____  _________________/    // ____  /  // ____  /    ##
 ##           // /  // /  // /                     // /  // /  // /  // /     ##
 ##          // /  // /  // /_____  _________     // /__// /__//_/__// /      ##
 ##         // /  // /  // ______/ // ______/    // __________________/       ##
@@ -69,6 +69,12 @@ class IntEntry(tk.Entry) :
         if not self.valid :
             self.sv.set(value)
         self.on_write()
+
+    def unset_min_value(self) :
+        self.min_value = 0
+
+    def unset_max_value(self) :
+        self.max_value = 1e69
 
     # Method to overwrite trace_add if needed
     def trace_add(self, *args) :
@@ -270,7 +276,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
         box = None
         # Crop from anchor and final resolution
         if "anchor" in kwargs and "size" in kwargs :
-            anchor = anchor_points[kwargs["anchor"]]
+            anchor = kwargs["anchor"]
             x = min(kwargs["size"][0], x0)
             y = min(kwargs["size"][1], y0)
             dx = int(x0-x)
@@ -429,6 +435,7 @@ class ResolutionLabelEntry :
         self.aspect_ratio = kwargs.get("aspectratio", 0.0)
         self.pads = kwargs.get("pads", kwargs)
         self.buffer = None
+        self.tile_buffer = None
 
         self.label_dict = {}
         add_from_kwargs(self.label_dict, "text", "labeltext", kwargs)
@@ -507,6 +514,14 @@ class ResolutionLabelEntry :
             self.last_modified = "y"
         self.update_complementary_y()
 
+    def set_x(self, x) :
+        self.aspect_ratio = float(x)/float(self.y_e.value)
+        self.x_e.set_value(x)
+
+    def set_y(self, y) :
+        self.aspect_ratio = float(self.x_e.value)/float(y)
+        self.y_e.set_value(y)
+
     def set(self, x, y) :
         self.aspect_ratio = float(x)/float(y)
         self.x_e.set_value(x)
@@ -515,10 +530,13 @@ class ResolutionLabelEntry :
     def set_buffer(self) :
         self.buffer = (self.x_e.value, self.y_e.value)
 
+    def set_tile_buffer(self, tile_x, tile_y) :
+        self.tile_buffer = (self.x_e.value*tile_x, self.y_e.value*tile_y)
+
     def reset_from_buffer(self) : 
         if self.buffer :
             self.set(self.buffer[0], self.buffer[1])
-        self.buffer = None
+        #self.buffer = None
 
     # Update out_res_y to be consistent with the current out_res_x if
     # the locked aspect ratio is toggled

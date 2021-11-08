@@ -1,7 +1,7 @@
 ###############################################################################
 ##                                                                           ##
-##             _________________________________    _________   _________    ##
-##            // ____  _____  _________________/   // ____  /  // ____  /    ##
+##             ________________________________     _________   _________    ##
+##            // ____  ____  _________________/    // ____  /  // ____  /    ##
 ##           // /  // /  // /                     // /  // /  // /  // /     ##
 ##          // /  // /  // /_____  _________     // /__// /__//_/__// /      ##
 ##         // /  // /  // ______/ // ______/    // __________________/       ##
@@ -138,11 +138,14 @@ class ImageProcessor :
         self.input_canvas = input_canvas
         self.output_canvas = output_canvas
         self.max_pixels = 128*128
-        self.default_mode_name = "Default"
-        self.tiled_mode_name = "Tiled"
-        self.GBC_mode_name = "Game Boy Color"
-        self.modes = [self.default_mode_name, self.tiled_mode_name, 
-            self.GBC_mode_name]
+        self.default_proc_mode_name = "Default"
+        self.tiled_proc_mode_name = "Tiled"
+        self.proc_modes = [self.default_proc_mode_name, 
+            self.tiled_proc_mode_name]
+        self.default_comp_mode_name = "Default"
+        self.GBC_comp_mode_name = "Game Boy Color"
+        self.comp_modes = [self.default_comp_mode_name, 
+            self.GBC_comp_mode_name]
     
     def best_palette_avg_norm(self, data, palettes) :
         if palettes.shape[0] > 1 :
@@ -215,8 +218,8 @@ class ImageProcessor :
         palette_size = kwargs["palettesize"]
         rgb_bits = kwargs["rgbbits"]
         fidelity = kwargs["fidelity"]
-        out_x = kwargs["outx"]
-        out_y = kwargs["outy"]
+        out_x = kwargs["outsize"][0]
+        out_y = kwargs["outsize"][1]
         aspect_ratio = out_x/out_y
         
         # Get or default
@@ -258,14 +261,17 @@ class ImageProcessor :
         self.output_canvas.set_zoom_draw_image(output_image)
 
     def process_tiled(self, **kwargs) :
-        n_palettes = kwargs["npalettes"]
+        #n_palettes = kwargs["npalettes"]
+        palettes_grid_x = kwargs["palettesgridsize"][0]
+        palettes_grid_y = kwargs["palettesgridsize"][1]
+        n_palettes = palettes_grid_x*palettes_grid_y
         palette_size = kwargs["palettesize"]
         rgb_bits = kwargs["rgbbits"]
         fidelity = kwargs["fidelity"]
         t_x = kwargs["tilesize"][0]
         t_y = kwargs["tilesize"][1]
-        out_t_x = kwargs["outx"]
-        out_t_y = kwargs["outy"]
+        out_t_x = kwargs["outsize"][0]
+        out_t_y = kwargs["outsize"][1]
         out_x = int(out_t_x*t_x)
         out_y = int(out_t_y*t_y)
         aspect_ratio = out_x/out_y
@@ -282,9 +288,38 @@ class ImageProcessor :
         input_image = input_image.resize((int(out_x*min(scale, 1.0)), 
             int(out_y*min(1.0, scale))), resample=Image.LANCZOS)
         data = np.array(input_image)
-        data = data.reshape(data.shape[0]*data.shape[1], 
-            data.shape[2])
+        #data = data.reshape(data.shape[0]*data.shape[1], 
+        #    data.shape[2])
 
+        # Determine palettes
+        palettes = []
+        dy = np.floor(data.shape[0]/palettes_grid_y)
+        dx = np.floor(data.shape[1]/palettes_grid_x)
+        start_time = time.time()
+        for i in range(palettes_grid_y) :
+            start_y = int(dy*i)
+            end_y = int(dy*(i+1))
+            if i == palettes_grid_y-1 :
+                end_y = data.shape[0]
+            data_cut_y = np.split(data, [start_y, end_y], axis=0)[1]
+            for j in range(palettes_grid_x) :
+                start_x = int(dx*j)
+                end_x = int(dx*(j+1))
+                if j == palettes_grid_x-1 :
+                    end_x = data.shape[1]
+                data_cut_xy = np.split(data_cut_y, [start_x, end_x], axis=1)[1]
+                data_cut_xy = data_cut_xy.reshape(
+                    data_cut_xy.shape[0]*data_cut_xy.shape[1], 
+                    data_cut_xy.shape[2])
+                k_means = KMeans(data=data_cut_xy, k=palette_size, 
+                    fidelity=fidelity)
+                k_means.means = self.convert_color_bits(k_means.means,
+                    rgb_bits)
+                palettes.append(k_means.means)
+        palettes = np.asarray(palettes)
+        print("Dt k-means =", (time.time()-start_time))
+
+        '''
         # Determine palettes
         palettes = []
         start_time = time.time()
@@ -304,7 +339,7 @@ class ImageProcessor :
             palettes.append(k_means.means)
         palettes = np.asarray(palettes)
         print("Dt k-means =", (time.time()-start_time))
-        
+        '''
         # Determine best palette for each tile. This is done or downsampled
         # tiles of 16x16. Then, perform the color quantization and assemble
         # the output image from the processed tiles
@@ -345,8 +380,8 @@ class ImageProcessor :
 
     def process(self, **kwargs) :
 
-        mode = kwargs.get("mode", self.default_mode_name)
-        if mode == self.default_mode_name :
+        proc_mode = kwargs["procmode"]
+        if proc_mode == self.default_proc_mode_name :
             self.process_default(**kwargs)
-        elif mode == self.tiled_mode_name or mode == self.GBC_mode_name:
+        elif proc_mode == self.tiled_proc_mode_name :
             self.process_tiled(**kwargs)
