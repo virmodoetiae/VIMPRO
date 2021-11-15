@@ -16,9 +16,12 @@
 
 ### IMPORTS ###################################################################
 
+import os
 import tkinter as tk
 from PIL import Image, ImageOps, ImageTk
 from tkinter.filedialog import askopenfile, asksaveasfile
+
+import VIMPRO_Data as vd
 
 ### FUNCTIONS #################################################################
 
@@ -452,8 +455,8 @@ class ResolutionLabelEntry :
             **self.pads[1])
 
         self.aspect_ratio_b = ToggleButton(self.top_level, bd=0,
-            onimage=ImageTk.PhotoImage(file="lock.png"), 
-            offimage=ImageTk.PhotoImage(file="ulock.png"), **self.entry_dict)
+            onimage=ImageTk.PhotoImage(vd.lock_image), 
+            offimage=ImageTk.PhotoImage(vd.ulock_image), **self.entry_dict)
         self.aspect_ratio_b.config(command=self.on_toggle_aspect_ratio)
         self.aspect_ratio_b.grid(row=self.row, column=self.column+2, 
             sticky=tk.W+tk.E, **self.pads[2])

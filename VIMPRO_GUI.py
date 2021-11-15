@@ -27,6 +27,7 @@ from PIL import Image, ImageOps, ImageTk
 
 import VIMPRO_Processor as vp
 import VIMPRO_Tkinter as vk
+import VIMPRO_Data as vd
 
 ### DICTIONARIES ##############################################################
 
@@ -65,7 +66,7 @@ class GUI(tk.Tk) :
 
         tk.Tk.__init__(self, *args, **kwargs)
         self.title("VIMPRO - Virmodoetiae Image Processor")
-        self.iconphoto(False, ImageTk.PhotoImage(file='icon.png'))
+        self.iconphoto(False, ImageTk.PhotoImage(vd.icon_image))
         self.bind("<Configure>", self.on_main_window_resize)
         self.frames = []
         
@@ -734,7 +735,7 @@ class GUI(tk.Tk) :
             print("Cannot save output because of invalid pixel size")
             return
         pixel_size = self.pixel_size_e.value
-        output_canvas.save_image(pixelsize=pixel_size, 
+        self.output_canvas.save_image(pixelsize=pixel_size, 
             appendstr="_VIMPRO_")
 
     def on_main_window_resize(self, *args) :

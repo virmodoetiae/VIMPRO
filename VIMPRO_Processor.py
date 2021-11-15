@@ -385,3 +385,8 @@ class ImageProcessor :
             self.process_default(**kwargs)
         elif proc_mode == self.tiled_proc_mode_name :
             self.process_tiled(**kwargs)
+
+        # Copy filename and path from input canvas to enable saving the image
+        # from the output canvas
+        self.output_canvas.filename = self.input_canvas.filename
+        self.output_canvas.filepath = self.input_canvas.filepath
