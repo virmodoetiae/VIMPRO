@@ -123,8 +123,8 @@ class GUI(tk.Tk) :
             "Palettes search grid" : 7, "Palette size" : 8, 
             "Bits per channel (R,G,B)" : 9, "Fidelity" : 10, "Tile size" : 11,
             "Output resolution" : 12, "Process image" : 13, 
-            "Save options" : 14, "Pixel size" : 15, "Final resolution" : 16,
-            "Save image" : 17}
+            "Output options" : 14, "Pixel size" : 15, "Final resolution" : 16,
+            "Save image" : 17, "Export .asm source" : 18}
 
         # Input options ------------------------------------------------------#
         row_name = "Input options"
@@ -262,11 +262,11 @@ class GUI(tk.Tk) :
         self.palettes_grid_x_e = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
         self.palettes_grid_x_e.set_min_value(1)
-        self.palettes_grid_x_e.set_value(2)
+        self.palettes_grid_x_e.set(4)
         self.palettes_grid_y_e = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
         self.palettes_grid_y_e.set_min_value(1)
-        self.palettes_grid_y_e.set_value(4)
+        self.palettes_grid_y_e.set(2)
 
         # Processor mode -------------#
         # This should come first, but the option menu needs to be tied to
@@ -314,7 +314,7 @@ class GUI(tk.Tk) :
             **self.pad1.get("w"))
         self.palette_size_e = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
-        self.palette_size_e.set_value(4)
+        self.palette_size_e.set(4)
         self.palette_size_e.set_min_value(1)
         self.palette_size_e.grid(row=row_n, column=1, columnspan=3,
             sticky=tk.W+tk.E, **self.pad1.get("e"))
@@ -331,21 +331,21 @@ class GUI(tk.Tk) :
             **self.pad1.get("w"))
 
         self.bits_R_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
-        self.bits_R_e.set_value(16)
+        self.bits_R_e.set(16)
         self.bits_R_e.set_min_value(2)
         self.bits_R_e.set_max_value(16)
         self.bits_R_e.grid(row=row_n, column=1, sticky=tk.W+tk.E,
             **self.pad1.get("c"))
         
         self.bits_G_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
-        self.bits_G_e.set_value(16)
+        self.bits_G_e.set(16)
         self.bits_G_e.set_min_value(2)
         self.bits_G_e.set_max_value(16)
         self.bits_G_e.grid(row=row_n, column=2, sticky=tk.W+tk.E,
             **self.pad1.get("c"))
         
         self.bits_B_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
-        self.bits_B_e.set_value(16)
+        self.bits_B_e.set(16)
         self.bits_B_e.set_min_value(2)
         self.bits_B_e.set_max_value(16)
         self.bits_B_e.grid(row=row_n, column=3, sticky=tk.W+tk.E,
@@ -373,11 +373,11 @@ class GUI(tk.Tk) :
         self.tile_size_e_x = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
         self.tile_size_e_x.set_min_value(1)
-        self.tile_size_e_x.set_value(8)
+        self.tile_size_e_x.set(8)
         self.tile_size_e_y = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
         self.tile_size_e_y.set_min_value(1)
-        self.tile_size_e_y.set_value(8)
+        self.tile_size_e_y.set(8)
 
         # Output resolution ----------#
         row_name = "Output resolution"
@@ -395,8 +395,8 @@ class GUI(tk.Tk) :
         self.process_image_b.grid(row=row_n, column=0, sticky=tk.W+tk.E, 
             **self.pad1.get("sw", "xx"))
         
-        # Save options -------------------------------------------------------#
-        row_name = "Save options"
+        # Output options -------------------------------------------------------#
+        row_name = "Output options"
         row_n = self.ctrl_rows[row_name]
         ttk.Separator(self.ctrl_frame, orient=tk.HORIZONTAL).grid(row=row_n,
             column=0, columnspan=n_cols, sticky=tk.W+tk.E, 
@@ -412,7 +412,7 @@ class GUI(tk.Tk) :
         pixel_size_l.grid(row=row_n, column=0, sticky=tk.W,
             **self.pad1.get("nw"))
         self.pixel_size_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
-        self.pixel_size_e.set_value(1)
+        self.pixel_size_e.set(1)
         self.pixel_size_e.set_min_value(1)
         self.pixel_size_e.grid(row=row_n, column=1, sticky=tk.W,
             **self.pad1.get("ne"))
@@ -434,6 +434,14 @@ class GUI(tk.Tk) :
         self.save_image_b = tk.Button(self.ctrl_frame, width=self.button_width,
             text=row_name, command=self.on_save_image)
         self.save_image_b.grid(row=row_n, column=0, sticky=tk.W+tk.E,
+            **self.pad1.get("sw", "xx"))
+
+        # Export .asm code -----------#
+        row_name = "Export .asm source"
+        row_n = self.ctrl_rows[row_name] 
+        self.export_asm_b = tk.Button(self.ctrl_frame, width=self.button_width,
+            text=row_name, command=self.on_export_asm)
+        self.export_asm_b.grid(row=row_n, column=0, sticky=tk.W+tk.E,
             **self.pad1.get("sw", "xx"))
 
         # Add functionality at the end to avoid potential issues regarding
@@ -518,8 +526,8 @@ class GUI(tk.Tk) :
                 sticky=tk.W+tk.E+tk.N+tk.S, **self.pad1.get("w", "xx", True))
         else :
             self.resize_frame.grid_forget()
-            self.resize_res_le.set(self.input_canvas.image_no_zoom_PIL.width,
-                self.input_canvas.image_no_zoom_PIL.height)
+            self.resize_res_le.set((self.input_canvas.image_no_zoom_PIL.width,
+                self.input_canvas.image_no_zoom_PIL.height))
 
     def on_resize(self) :
         if not self.resize_res_le.valid() :
@@ -561,8 +569,8 @@ class GUI(tk.Tk) :
                 self.on_selection_tool()
             self.input_canvas.delete_selection_rectangle()
             self.crop_frame.grid_forget()
-            self.crop_res_le.set(self.input_canvas.image_no_zoom_PIL.width,
-                self.input_canvas.image_no_zoom_PIL.height)
+            self.crop_res_le.set((self.input_canvas.image_no_zoom_PIL.width,
+                self.input_canvas.image_no_zoom_PIL.height))
 
     def on_selection_tool(self) :
         self.selection_tool_b.on_toggle_change()
@@ -633,7 +641,7 @@ class GUI(tk.Tk) :
                 if comp_mode == self.image_processor.GBC_comp_mode_name :
                     self.tile_size_e_y.set_max_value(148)
                     self.tile_size_e_x.set_max_value(160)
-                    self.out_res_le.set(160, 148)
+                    self.out_res_le.set((160, 148))
                 else :
                     self.out_res_le.x_e.unset_max_value()
                     self.out_res_le.y_e.unset_max_value()    
@@ -665,7 +673,7 @@ class GUI(tk.Tk) :
                             self.tile_size_e_x.value))
                         y = int(np.floor(self.out_res_le.y_e.value/
                             self.tile_size_e_y.value))
-                        self.out_res_le.set(x, y)
+                        self.out_res_le.set((x, y))
         self.prev_proc_mode = proc_mode
 
     def on_comp_mode(self, *args) :
@@ -673,9 +681,14 @@ class GUI(tk.Tk) :
         proc_mode = self.proc_mode_sv.get()
         if (comp_mode == self.image_processor.GBC_comp_mode_name) :
             self.palette_size_e.set_max_value(4)
-            self.tile_size_e_y.set_max_value(148)
-            self.tile_size_e_x.set_max_value(160)
-            self.out_res_le.set(160, 148)
+            #self.tile_size_e_y.set_max_value(148)
+            #self.tile_size_e_x.set_max_value(160)
+            self.tile_size_e_x.set(8)
+            self.tile_size_e_x.disable()
+            self.tile_size_e_y.set(8)
+            self.tile_size_e_y.disable()
+            self.out_res_le.set((160, 148))
+            self.out_res_le.disable()
             if (proc_mode == self.image_processor.tiled_proc_mode_name) :
                 self.prev_proc_mode = None
                 self.on_proc_mode(setoutresbuffer=False)
@@ -683,8 +696,11 @@ class GUI(tk.Tk) :
                 pass
         elif (comp_mode == self.image_processor.default_comp_mode_name) :
             self.palette_size_e.unset_max_value()
-            self.tile_size_e_y.unset_max_value()
-            self.tile_size_e_x.unset_max_value()
+            #self.tile_size_e_y.unset_max_value()
+            #self.tile_size_e_x.unset_max_value()
+            self.tile_size_e_x.enable()
+            self.tile_size_e_y.enable()
+            self.out_res_le.enable()
             self.out_res_le.x_e.unset_max_value()
             self.out_res_le.y_e.unset_max_value()
             self.out_res_le.reset_from_buffer()
@@ -710,16 +726,16 @@ class GUI(tk.Tk) :
                 pass
     '''
     def on_write_tile_size_x(self, *args) :
-        self.out_res_le.set_tile_buffer(self.tile_size_e_x.value, 
-            self.tile_size_e_y.value)
+        self.out_res_le.set_tile_buffer((self.tile_size_e_x.value, 
+            self.tile_size_e_y.value))
         self.tile_size_e_x.on_write()
         x = int(self.out_res_le.tile_buffer[0]/
                             self.tile_size_e_x.value)
         self.out_res_le.set_x(x)
 
     def on_write_tile_size_y(self, *args) :
-        self.out_res_le.set_tile_buffer(self.tile_size_e_x.value, 
-            self.tile_size_e_y.value)
+        self.out_res_le.set_tile_buffer((self.tile_size_e_x.value, 
+            self.tile_size_e_y.value))
         self.tile_size_e_y.on_write()
         y = int(self.out_res_le.tile_buffer[1]/
                             self.tile_size_e_y.value)
@@ -737,6 +753,9 @@ class GUI(tk.Tk) :
         pixel_size = self.pixel_size_e.value
         self.output_canvas.save_image(pixelsize=pixel_size, 
             appendstr="_VIMPRO_")
+
+    def on_export_asm(self) :
+        pass
 
     def on_main_window_resize(self, *args) :
         pass
@@ -787,11 +806,11 @@ class GUI(tk.Tk) :
         self.update_save_resolution()
 
     def update_all_res_entries(self, x, y) :
-        self.resize_res_le.set(x, y)
+        self.resize_res_le.set((x, y))
         self.crop_res_le.x_e.set_max_value(x)
         self.crop_res_le.y_e.set_max_value(y)
-        self.crop_res_le.set(x, y)
-        self.out_res_le.set(x, y)
+        self.crop_res_le.set((x, y))
+        self.out_res_le.set((x, y))
         # Set max values on the cropping field to prevent useless cropping when
         # the target crop resolution is larger than the current image
         # resolution

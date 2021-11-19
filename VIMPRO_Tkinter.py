@@ -57,7 +57,13 @@ class IntEntry(tk.Entry) :
             self.valid = False
             self.config({"background": "Red"})
 
-    def set_value(self, value) :
+    def disable(self) :
+        self.config(state=tk.DISABLED)
+
+    def enable(self) :
+        self.config(state=tk.NORMAL)
+
+    def set(self, value) :
         self.sv.set(value)
         self.on_write()
 
@@ -280,8 +286,9 @@ class MouseScrollableImageCanvas(tk.Canvas):
         # Crop from anchor and final resolution
         if "anchor" in kwargs and "size" in kwargs :
             anchor = kwargs["anchor"]
-            x = min(kwargs["size"][0], x0)
-            y = min(kwargs["size"][1], y0)
+            x, y = kwargs["size"]
+            x = min(x, x0)
+            y = min(y, y0)
             dx = int(x0-x)
             dy = int(y0-y)
             dx_2 = int(dx/2.0)
@@ -439,6 +446,7 @@ class ResolutionLabelEntry :
         self.pads = kwargs.get("pads", kwargs)
         self.buffer = None
         self.tile_buffer = None
+        self.buffers = [[0,0] for i in range(3)]
 
         self.label_dict = {}
         add_from_kwargs(self.label_dict, "text", "labeltext", kwargs)
@@ -519,27 +527,36 @@ class ResolutionLabelEntry :
 
     def set_x(self, x) :
         self.aspect_ratio = float(x)/float(self.y_e.value)
-        self.x_e.set_value(x)
+        self.x_e.set(x)
 
     def set_y(self, y) :
         self.aspect_ratio = float(self.x_e.value)/float(y)
-        self.y_e.set_value(y)
+        self.y_e.set(y)
 
-    def set(self, x, y) :
+    def set(self, t) :
+        x, y = t
         self.aspect_ratio = float(x)/float(y)
-        self.x_e.set_value(x)
-        self.y_e.set_value(y)
+        self.x_e.set(x)
+        self.y_e.set(y)
 
     def set_buffer(self) :
         self.buffer = (self.x_e.value, self.y_e.value)
 
-    def set_tile_buffer(self, tile_x, tile_y) :
-        self.tile_buffer = (self.x_e.value*tile_x, self.y_e.value*tile_y)
+    def set_buffers(self, i) :
+        self.buffers[i] = (self.x_e.value, self.y_e.value)
+
+    def set_tile_buffer(self, t) :
+        x, y = t
+        self.tile_buffer = (self.x_e.value*x, self.y_e.value*y)
 
     def reset_from_buffer(self) : 
         if self.buffer :
-            self.set(self.buffer[0], self.buffer[1])
-        #self.buffer = None
+            x, y = self.buffer
+            self.set((x, y))
+    
+    def reset_from_buffers(self, i) : 
+        if self.buffers[i] :
+            self.set(self.buffers[i])
 
     # Update out_res_y to be consistent with the current out_res_x if
     # the locked aspect ratio is toggled
@@ -548,7 +565,7 @@ class ResolutionLabelEntry :
         if (self.aspect_ratio != 0.0 and
             self.aspect_ratio_b.toggled) :
             new_y = int(self.x_e.value/self.aspect_ratio)
-            self.y_e.set_value(new_y)
+            self.y_e.set(new_y)
         self.update_in_progress = False
 
     # Update out_res_x to be consistent with the current out_res_y if
@@ -558,7 +575,7 @@ class ResolutionLabelEntry :
         if (self.aspect_ratio != 0.0 and 
             self.aspect_ratio_b.toggled) :
             new_x = int(self.y_e.value*self.aspect_ratio)
-            self.x_e.set_value(new_x)
+            self.x_e.set(new_x)
         self.update_in_progress = False  
 
     def valid(self) :

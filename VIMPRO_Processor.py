@@ -319,27 +319,6 @@ class ImageProcessor :
         palettes = np.asarray(palettes)
         print("Dt k-means =", (time.time()-start_time))
 
-        '''
-        # Determine palettes
-        palettes = []
-        start_time = time.time()
-        delta = np.floor(data.shape[0]/n_palettes)
-        for i in range(n_palettes) :
-            cut_data = None
-            s = int(i*delta)
-            if i != n_palettes-1 :
-                e = int((i+1)*delta)
-                cut_data = data[s:e]
-            else :
-                e = int((i)*delta)
-                cut_data = data[e:]
-            k_means = KMeans(data=cut_data, k=palette_size, fidelity=fidelity)
-            k_means.means = self.convert_color_bits(k_means.means,
-                rgb_bits)
-            palettes.append(k_means.means)
-        palettes = np.asarray(palettes)
-        print("Dt k-means =", (time.time()-start_time))
-        '''
         # Determine best palette for each tile. This is done or downsampled
         # tiles of 16x16. Then, perform the color quantization and assemble
         # the output image from the processed tiles
