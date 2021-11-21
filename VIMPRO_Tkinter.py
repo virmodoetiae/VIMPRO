@@ -18,6 +18,7 @@
 
 import os
 import tkinter as tk
+from tkinter import ttk
 from PIL import Image, ImageOps, ImageTk
 from tkinter.filedialog import askopenfile, asksaveasfile
 
@@ -429,6 +430,32 @@ class IntEntry(tk.Entry) :
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
+# Wrapper class for ttk.OptionMenu in order to make it interchangable with 
+# an IntEntry object
+class IntOptionMenu(ttk.OptionMenu) :
+
+    def __init__(self, *args, **kwargs) :
+        self.top_level = args[0]
+        self.values = kwargs.pop("values")
+        self.value = self.values[0]
+        self.valid = True
+
+        self.sv = tk.IntVar()
+        ttk.OptionMenu.__init__(self, self.top_level, self.sv, 
+            list(self.values)[0], *list(self.values))
+        self.sv.trace("w", self.on_write)
+
+    def on_write(self, *args) :
+        self.value = self.sv.get()
+
+    # Method to overwrite trace_add if needed
+    def trace(self, *args) :
+        self.sv.trace(*args)
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+
 # Compund object consisting of a label, two entries represnting and x and y
 # resolution fields as well as a middle button that acts as an aspect ratio
 # lock
@@ -549,11 +576,21 @@ class ResolutionLabelEntry :
     def free_slave(self) :
         try :
             self.slave.master = None
-        except : # I know...
-            pass
+        except : 
+            pass # I know it's bad practice...
         self.slave = None
         self.x_scale = None
         self.y_scale = None
+
+    def toggle_aspect_ratio_on(self) :
+        self.aspect_ratio_b.toggle_on()
+        if self.slave :
+            self.slave.aspect_ratio_b.toggle_on()
+
+    def toggle_aspect_ratio_off(self) :
+        self.aspect_ratio_b.toggle_off()
+        if self.slave :
+            self.slave.aspect_ratio_b.toggle_off()
 
     def on_toggle_aspect_ratio(self) :
         self.aspect_ratio_b.on_toggle_change()

@@ -383,6 +383,15 @@ class GUI(tk.Tk) :
         self.tile_size_e_y.set_min_value(1)
         self.tile_size_e_y.set(8)
 
+        # These are the OptionMenus that are substituted to the tile_size_*
+        # entries when in Game Boy Color compatibility mode
+        GBC_x_values = [8, 16, 32, 40, 80, 160]
+        GBC_y_values = [8, 16, 24, 48, 72, 144]
+        self.tile_size_e_x_tmp = vk.IntOptionMenu(self.ctrl_frame, 
+            values=GBC_x_values)
+        self.tile_size_e_y_tmp = vk.IntOptionMenu(self.ctrl_frame, 
+            values=GBC_y_values)
+
         # Tiles grid size ------------#
         row_name = "Tiles grid size"
         row_n = self.ctrl_rows[row_name]
@@ -426,7 +435,8 @@ class GUI(tk.Tk) :
             width=self.label_width)
         pixel_size_l.grid(row=row_n, column=0, sticky=tk.W,
             **self.pad1.get("nw"))
-        self.pixel_size_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
+        self.pixel_size_e = vk.IntEntry(self.ctrl_frame, 
+            width=self.entry_width)
         self.pixel_size_e.set(1)
         self.pixel_size_e.set_min_value(1)
         self.pixel_size_e.grid(row=row_n, column=1, sticky=tk.W,
@@ -463,6 +473,8 @@ class GUI(tk.Tk) :
         # referencing missing variables
         self.tile_size_e_x.trace("w", self.on_write_tile_size_x)
         self.tile_size_e_y.trace("w", self.on_write_tile_size_y)
+        self.tile_size_e_x_tmp.trace("w", self.on_write_tile_size_x)
+        self.tile_size_e_y_tmp.trace("w", self.on_write_tile_size_y)
         self.pixel_size_e.trace("w", self.on_write_pixel_size)
 
         #---------------------------------------------------------------------#
@@ -523,7 +535,7 @@ class GUI(tk.Tk) :
             # Toggle aspect ratio locks on after loading
             self.resize_res_le.aspect_ratio_b.toggle_on()
             self.crop_res_le.aspect_ratio_b.toggle_on()
-            self.out_res_le.aspect_ratio_b.toggle_on()
+            self.out_res_le.toggle_aspect_ratio_on()
 
     def on_open_resize(self) :
         # First, close the cropping tool if open
@@ -661,7 +673,7 @@ class GUI(tk.Tk) :
 
             if comp_mode == self.image_processor.GBC_comp_mode_name :
                 self.out_res_le.set_buffer("GBC")
-                self.out_res_le.set((160, 148))
+                self.out_res_le.set((160, 144))
                 self.out_res_le.disable()
             else : 
                 self.out_res_le.enable()
@@ -675,6 +687,7 @@ class GUI(tk.Tk) :
                 sticky=tk.W+tk.E, **self.pad1.get("e"))
             self.palettes_grid_y_e.grid(row=row_n, column=2,
                 sticky=tk.W+tk.E, **self.pad1.get("e"))
+
             row_name = "Tile size"
             row_n = self.ctrl_rows[row_name]
             self.tile_size_l.grid(row=row_n, column=0,
@@ -707,7 +720,7 @@ class GUI(tk.Tk) :
             if comp_mode == self.image_processor.GBC_comp_mode_name :
                 self.tiles_grid_le.set_buffer("GBC")
                 self.out_res_le.set_buffer("GBC")
-                self.out_res_le.set((160, 148))
+                self.out_res_le.set((160, 144))
                 self.out_res_le.disable()
 
     def on_comp_mode(self, *args, **kwargs) :
@@ -719,6 +732,26 @@ class GUI(tk.Tk) :
     def update_comp_mode(self, *args) :
         comp_mode = self.comp_mode_sv.get()
         proc_mode = self.proc_mode_sv.get()
+
+        if (self.prev_comp_mode != comp_mode) :
+            row_name = "Tile size"
+            row_n = self.ctrl_rows[row_name]
+            self.tile_size_e_x.grid_forget()
+            self.tile_size_e_y.grid_forget()
+            x_tmp = self.tile_size_e_x
+            y_tmp = self.tile_size_e_y
+            self.tile_size_e_x = self.tile_size_e_x_tmp
+            self.tile_size_e_y = self.tile_size_e_y_tmp
+            self.tile_size_e_x_tmp = x_tmp
+            self.tile_size_e_y_tmp = y_tmp
+            self.tiles_grid_le.x_scale = self.tile_size_e_x
+            self.tiles_grid_le.y_scale = self.tile_size_e_y
+            if (proc_mode == self.image_processor.tiled_proc_mode_name) :
+                self.tile_size_e_x.grid(row=row_n, column=1,
+                    sticky=tk.W+tk.E, **self.pad1.get("c"))
+                self.tile_size_e_y.grid(row=row_n, column=2,
+                    sticky=tk.W+tk.E, **self.pad1.get("e"))
+
         if (comp_mode == self.image_processor.GBC_comp_mode_name) :
             self.palette_size_e.set_max_value(4)
             self.bits_buffer = (self.bits_R_e.value, self.bits_G_e.value, 
@@ -729,15 +762,11 @@ class GUI(tk.Tk) :
             self.bits_R_e.disable()
             self.bits_G_e.disable()
             self.bits_B_e.disable()
-            self.tile_size_e_x.set(8)
-            self.tile_size_e_x.disable()
-            self.tile_size_e_y.set(8)
-            self.tile_size_e_y.disable()
             self.tiles_grid_le.set_buffer("GBC")
             self.out_res_le.set_buffer("GBC")
             self.tiles_grid_le.set((20, 18))
             self.tiles_grid_le.disable()
-            self.out_res_le.set((160, 148))
+            self.out_res_le.set((160, 144))
             self.out_res_le.disable()
 
         elif (comp_mode == self.image_processor.default_comp_mode_name) :
@@ -748,8 +777,6 @@ class GUI(tk.Tk) :
             self.bits_R_e.enable()
             self.bits_G_e.enable()
             self.bits_B_e.enable()
-            self.tile_size_e_x.enable()
-            self.tile_size_e_y.enable()
             self.tiles_grid_le.enable()
             if  (proc_mode == self.image_processor.default_proc_mode_name) :
                 self.out_res_le.enable()
@@ -779,14 +806,14 @@ class GUI(tk.Tk) :
         
         prev_state = self.tiles_grid_le.aspect_ratio_b.toggled
         if prev_state == True :
-            self.tiles_grid_le.on_toggle_aspect_ratio()
+            self.tiles_grid_le.toggle_aspect_ratio_off() #on_toggle_aspect_ratio()
         self.tiles_grid_le.disable_auto_write_buffer()
         self.out_res_le.disable_auto_write_buffer()
         self.tiles_grid_le.set_y(y)
         self.tiles_grid_le.enable_auto_write_buffer("ref")
         self.out_res_le.enable_auto_write_buffer("ref")
         if prev_state == True :
-            self.tiles_grid_le.on_toggle_aspect_ratio()
+            self.tiles_grid_le.toggle_aspect_ratio_on()#.on_toggle_aspect_ratio()
     
     def on_write_pixel_size(self, *args) :
         self.pixel_size_e.on_write(args)
