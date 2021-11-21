@@ -295,7 +295,7 @@ class ImageProcessor :
         palettes = []
         dy = np.floor(data.shape[0]/palettes_grid_y)
         dx = np.floor(data.shape[1]/palettes_grid_x)
-        start_time = time.time()
+        start_time = time.perf_counter()
         for i in range(palettes_grid_y) :
             start_y = int(dy*i)
             end_y = int(dy*(i+1))
@@ -317,14 +317,14 @@ class ImageProcessor :
                     rgb_bits)
                 palettes.append(k_means.means)
         palettes = np.asarray(palettes)
-        print("Dt k-means =", (time.time()-start_time))
+        print("Dt k-means =", (time.perf_counter()-start_time))
 
         # Determine best palette for each tile. This is done or downsampled
         # tiles of 16x16. Then, perform the color quantization and assemble
         # the output image from the processed tiles
         best_palettes = []
         max_tile_pixels = 16*16
-        start_time = time.time()
+        start_time = time.perf_counter()
         out = np.empty((0, out_x, 3))
         for j in range(out_t_y) :
             hout = np.empty((t_y, 0, 3))
@@ -351,7 +351,7 @@ class ImageProcessor :
                 data = data.reshape(orig_shape)
                 hout = np.hstack((hout, data))
             out = np.vstack((out, hout))
-        print("Dt substitution =", (time.time()-start_time))
+        print("Dt substitution =", (time.perf_counter()-start_time))
         
         # Convert back to image and draw to canvas
         output_image = Image.fromarray(out.astype(np.uint8))

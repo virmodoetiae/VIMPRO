@@ -30,68 +30,10 @@ def add_from_kwargs(dict, dict_key, kwargs_key, kwargs) :
     if kwargs_key in kwargs :
         dict[dict_key] = kwargs[kwargs_key]
 
+def void(*args, **kwargs) :
+    pass
+
 ### CLASSES ###################################################################
-
-# Class to handle an entry of an integer in a way that is closer to what I 
-# need compared to tk.IntVar
-class IntEntry(tk.Entry) :
-
-    def __init__(self, *args, **kwargs) :
-        tk.Entry.__init__(self, *args, **kwargs)
-        self.sv = tk.StringVar()
-        self.config(textvariable=self.sv)
-        self.value = None
-        self.min_value = 0
-        self.max_value = 1e69
-        self.valid = False
-        self.sv.trace_add("write", self.on_write)
-
-    def on_write(self, *args) :
-        try :
-            self.value = max(min(int(self.sv.get()), self.max_value), 
-                self.min_value)
-            self.sv.set(self.value)
-            self.valid = True
-            self.config({"background": "White"})
-        except :
-            self.valid = False
-            self.config({"background": "Red"})
-
-    def disable(self) :
-        self.config(state=tk.DISABLED)
-
-    def enable(self) :
-        self.config(state=tk.NORMAL)
-
-    def set(self, value) :
-        self.sv.set(value)
-        self.on_write()
-
-    def set_min_value(self, value) :
-        self.min_value = value
-        if not self.valid :
-            self.sv.set(value)
-        self.on_write()
-
-    def set_max_value(self, value) :
-        self.max_value = value
-        if not self.valid :
-            self.sv.set(value)
-        self.on_write()
-
-    def unset_min_value(self) :
-        self.min_value = 0
-
-    def unset_max_value(self) :
-        self.max_value = 1e69
-
-    # Method to overwrite trace_add if needed
-    def trace_add(self, *args) :
-        self.sv.trace_add(*args)
-
-#-----------------------------------------------------------------------------#
-#-----------------------------------------------------------------------------#
-#-----------------------------------------------------------------------------#
 
 class MouseScrollableImageCanvas(tk.Canvas):
     
@@ -134,7 +76,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
 
     # Scrolling
     def click(self, event):
-        if self.selection_tool_b : # If button is linked
+        if self.selection_tool_b : # If button is slave
             if self.selection_tool_b.toggled : # If button is on
                 if self.selection_rectangle : # If a selection exists
                     self.selection_rectangle.delete()
@@ -429,6 +371,64 @@ class Padding :
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
+# Class to handle an entry of an integer in a way that is closer to what I 
+# need compared to tk.IntVar
+class IntEntry(tk.Entry) :
+
+    def __init__(self, *args, **kwargs) :
+        tk.Entry.__init__(self, *args, **kwargs)
+        self.sv = tk.StringVar()
+        self.config(textvariable=self.sv)
+        self.value = None
+        self.min_value = 0
+        self.max_value = 1e69
+        self.valid = False
+        self.sv.trace("w", self.on_write)
+
+    def on_write(self, *args) :
+        try :
+            self.value = max(min(int(self.sv.get()), self.max_value), 
+                self.min_value)
+            self.sv.set(self.value)
+            self.valid = True
+            self.config({"background": "White"})
+        except :
+            self.valid = False
+            self.config({"background": "Red"})
+
+    def disable(self) :
+        self.config(state=tk.DISABLED)
+
+    def enable(self) :
+        self.config(state=tk.NORMAL)
+
+    def set(self, value) :
+        self.sv.set(value)
+
+    def set_min_value(self, value) :
+        self.min_value = value
+        if not self.valid :
+            self.sv.set(value)
+
+    def set_max_value(self, value) :
+        self.max_value = value
+        if not self.valid :
+            self.sv.set(value)
+
+    def unset_min_value(self) :
+        self.min_value = 0
+
+    def unset_max_value(self) :
+        self.max_value = 1e69
+
+    # Method to overwrite trace_add if needed
+    def trace(self, *args) :
+        self.sv.trace(*args)
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+
 # Compund object consisting of a label, two entries represnting and x and y
 # resolution fields as well as a middle button that acts as an aspect ratio
 # lock
@@ -438,50 +438,51 @@ class ResolutionLabelEntry :
         self.top_level = args[0]
         self.row = kwargs.get("row", 0)
         self.column = kwargs.get("column", 0)
+        self.pads = kwargs.get("pads", kwargs)
         self.min_value = kwargs.get("minvalue")
         self.max_value = kwargs.get("maxvalue")
+        self.aspect_ratio = kwargs.get("aspectratio", 0.0)
+
+        self.slave = None
+        self.master= None
+        self.x_scale = None
+        self.y_scale = None
+        self.update_buffer_after_write = True
+
+        self.buffers = {}
+        self.auto_write_buffer = None
         self.last_modified = None
         self.update_in_progress = False
-        self.aspect_ratio = kwargs.get("aspectratio", 0.0)
-        self.pads = kwargs.get("pads", kwargs)
-        self.buffer = None
-        self.tile_buffer = None
-        self.buffers = [[0,0] for i in range(3)]
 
         self.label_dict = {}
         add_from_kwargs(self.label_dict, "text", "labeltext", kwargs)
         add_from_kwargs(self.label_dict, "width", "labelwidth", kwargs)
         self.l = tk.Label(self.top_level, anchor=tk.W, **self.label_dict)
-        self.l.grid(row=self.row, column=self.column, sticky=tk.W, 
-            **self.pads[0])
         
         self.entry_dict = {}
         add_from_kwargs(self.entry_dict, "width", "entrywidth", kwargs)
 
         self.x_e = IntEntry(self.top_level, **self.entry_dict)
-        self.x_e.grid(row=self.row, column=self.column+1, sticky=tk.W+tk.E, 
-            **self.pads[1])
 
         self.aspect_ratio_b = ToggleButton(self.top_level, bd=0,
             onimage=ImageTk.PhotoImage(vd.lock_image), 
             offimage=ImageTk.PhotoImage(vd.ulock_image), **self.entry_dict)
-        self.aspect_ratio_b.config(command=self.on_toggle_aspect_ratio)
-        self.aspect_ratio_b.grid(row=self.row, column=self.column+2, 
-            sticky=tk.W+tk.E, **self.pads[2])
+        self.aspect_ratio_b.config(command=self.on_toggle_aspect_ratio)        
 
         self.y_e = IntEntry(self.top_level, **self.entry_dict)
-        self.y_e.grid(row=self.row, column=self.column+3, sticky=tk.W+tk.E, 
-            **self.pads[3])
+        
+        if not kwargs.get("starthidden", False) :
+            self.show()
 
         if self.min_value :
             self.x_e.set_min_value(self.min_value)
             self.y_e.set_min_value(self.min_value)
         if self.max_value :
-            self.x_e.set_min_value(self.max_value)
-            self.y_e.set_min_value(self.max_value)
+            self.x_e.set_max_value(self.max_value)
+            self.y_e.set_max_value(self.max_value)
 
-        self.x_e.trace_add("write", self.on_write_x)
-        self.y_e.trace_add("write", self.on_write_y)
+        self.x_e.trace("w", self.on_write_x)
+        self.y_e.trace("w", self.on_write_y)
 
     def disable(self) :
         self.x_e.config(state=tk.DISABLED)
@@ -493,15 +494,82 @@ class ResolutionLabelEntry :
         self.y_e.config(state=tk.NORMAL)
         self.aspect_ratio_b.config(state=tk.NORMAL)
 
+    def hide(self) :
+        self.l.grid_forget()
+        self.x_e.grid_forget()
+        self.hide_aspect_ratio_b()
+        self.y_e.grid_forget()
+
+    def hide_aspect_ratio_b(self) :
+        self.aspect_ratio_b.grid_forget()
+
+    def show(self) :
+        self.l.grid(row=self.row, column=self.column, sticky=tk.W, 
+            **self.pads[0])
+        self.x_e.grid(row=self.row, column=self.column+1, sticky=tk.W+tk.E, 
+            **self.pads[1])
+        self.show_aspect_ratio_b()
+        self.y_e.grid(row=self.row, column=self.column+3, sticky=tk.W+tk.E, 
+            **self.pads[3])
+
+    def show_aspect_ratio_b(self) :
+        self.aspect_ratio_b.grid(row=self.row, column=self.column+2, 
+            sticky=tk.W+tk.E, **self.pads[2])
+
+    def set_max_value(self, t) :
+        x, y = t
+        self.x_e.set_max_value(x)
+        self.y_e.set_max_value(y)
+
+    def set_min_value(self, t) :
+        x, y = t
+        self.x_e.set_min_value(x)
+        self.y_e.set_min_value(y)
+
+    def unset_max_value(self, t) :
+        x, y = t
+        self.x_e.unset_max_value()
+        self.y_e.unset_max_value()
+
+    def unset_min_value(self, t) :
+        x, y = t
+        self.x_e.unset_min_value()
+        self.y_e.unset_min_value()
+
+    def set_slave(self, slave, **kwargs) :
+        x, y = kwargs.get("xyscales", (None, None))
+        self.x_scale = x
+        self.y_scale = y
+        self.slave = slave
+        self.slave.master = self
+        self.slave.last_modified = self.last_modified
+        self.slave.aspect_ratio_b.toggled = not self.aspect_ratio_b.toggled
+        self.slave.on_toggle_aspect_ratio()
+
+    def free_slave(self) :
+        try :
+            self.slave.master = None
+        except : # I know...
+            pass
+        self.slave = None
+        self.x_scale = None
+        self.y_scale = None
+
     def on_toggle_aspect_ratio(self) :
         self.aspect_ratio_b.on_toggle_change()
+        self.aspect_ratio = self.x_e.value/self.y_e.value
+        '''
         if self.aspect_ratio_b.toggled :
-
-            # Update last modified variable
             if self.last_modified == "x" :
                 self.update_complementary_x()
             elif self.last_modified == "y" :
                 self.update_complementary_y()
+        '''
+        if self.slave :
+            self.slave.last_modified = self.last_modified
+            self.slave.aspect_ratio_b.toggled = \
+                not self.aspect_ratio_b.toggled
+            self.slave.on_toggle_aspect_ratio()
 
     def on_write_x(self, *args) :
         if self.update_in_progress :
@@ -513,6 +581,13 @@ class ResolutionLabelEntry :
         if self.x_e.value != old_x :
             self.last_modified = "x"
         self.update_complementary_x()
+        if self.slave and self.x_scale and self.y_scale:
+            self.slave.last_modified = self.last_modified
+            self.slave.set_x(self.x_e.value*self.x_scale.value, False)
+            self.slave.update_complementary_x()
+        if self.auto_write_buffer :
+            self.buffers[self.auto_write_buffer] = (self.x_e.value, 
+                self.y_e.value)
 
     def on_write_y(self, *args) :
         if self.update_in_progress :
@@ -524,47 +599,64 @@ class ResolutionLabelEntry :
         if self.y_e.value != old_y :
             self.last_modified = "y"
         self.update_complementary_y()
+        if self.slave and self.y_scale and self.x_scale:
+            self.slave.last_modified = self.last_modified
+            self.slave.set_y(self.y_e.value*self.y_scale.value, False)
+            self.slave.update_complementary_y()
+        if self.auto_write_buffer :
+            self.buffers[self.auto_write_buffer] = (self.x_e.value, 
+                self.y_e.value)
 
-    def set_x(self, x) :
-        self.aspect_ratio = float(x)/float(self.y_e.value)
+    def set_x(self, x, setaspectratio=True) :
+        if setaspectratio :
+            self.aspect_ratio = float(x)/float(self.y_e.value)
         self.x_e.set(x)
 
-    def set_y(self, y) :
-        self.aspect_ratio = float(self.x_e.value)/float(y)
+    def set_y(self, y, setaspectratio=True) :
+        if setaspectratio :
+            self.aspect_ratio = float(self.x_e.value)/float(y)
         self.y_e.set(y)
 
     def set(self, t) :
         x, y = t
+        # This master reset/set is force the setting of the resolution entries
+        # without triggering the "if self.master ..." condition in 
+        # update_complementary_*
+        master_buffer = self.master
+        self.master = None
         self.aspect_ratio = float(x)/float(y)
         self.x_e.set(x)
         self.y_e.set(y)
+        self.master = master_buffer
 
-    def set_buffer(self) :
-        self.buffer = (self.x_e.value, self.y_e.value)
+    def enable_auto_write_buffer(self, buffer_name) :
+        self.auto_write_buffer = buffer_name
+        #self.buffers[self.auto_write_buffer] = (self.x_e.value, self.y_e.value)
 
-    def set_buffers(self, i) :
-        self.buffers[i] = (self.x_e.value, self.y_e.value)
+    def disable_auto_write_buffer(self) :
+        #self.buffers[self.auto_write_buffer] = None
+        self.auto_write_buffer = None
 
-    def set_tile_buffer(self, t) :
-        x, y = t
-        self.tile_buffer = (self.x_e.value*x, self.y_e.value*y)
-
-    def reset_from_buffer(self) : 
-        if self.buffer :
-            x, y = self.buffer
-            self.set((x, y))
+    def set_buffer(self, i, t=None) :
+        x = self.x_e.value
+        y = self.y_e.value
+        if t :
+            x, y = t
+        self.buffers[i] = (x, y)
     
-    def reset_from_buffers(self, i) : 
-        if self.buffers[i] :
+    def reset_from_buffer(self, i) : 
+        if i in self.buffers :
             self.set(self.buffers[i])
 
     # Update out_res_y to be consistent with the current out_res_x if
     # the locked aspect ratio is toggled
     def update_complementary_x(self) :
         self.update_in_progress = True
-        if (self.aspect_ratio != 0.0 and
-            self.aspect_ratio_b.toggled) :
-            new_y = int(self.x_e.value/self.aspect_ratio)
+        if self.aspect_ratio_b.toggled :
+            if self.master and self.master.y_scale :
+                new_y = int(self.master.y_e.value*self.master.y_scale.value)
+            elif self.aspect_ratio != 0.0 :
+                new_y = int(self.x_e.value/self.aspect_ratio)
             self.y_e.set(new_y)
         self.update_in_progress = False
 
@@ -572,9 +664,11 @@ class ResolutionLabelEntry :
     # the locked aspect ratio is toggled
     def update_complementary_y(self) :
         self.update_in_progress = True
-        if (self.aspect_ratio != 0.0 and 
-            self.aspect_ratio_b.toggled) :
-            new_x = int(self.y_e.value*self.aspect_ratio)
+        if self.aspect_ratio_b.toggled :
+            if self.master and self.master.x_scale :
+                new_x = int(self.master.x_e.value*self.master.x_scale.value)
+            elif self.aspect_ratio != 0.0 :
+                new_x = int(self.y_e.value*self.aspect_ratio)
             self.x_e.set(new_x)
         self.update_in_progress = False  
 
