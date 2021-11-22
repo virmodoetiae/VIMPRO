@@ -334,21 +334,21 @@ class GUI(tk.Tk) :
 
         self.bits_R_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
         self.bits_R_e.set(16)
-        self.bits_R_e.set_min_value(2)
+        self.bits_R_e.set_min_value(1)
         self.bits_R_e.set_max_value(16)
         self.bits_R_e.grid(row=row_n, column=1, sticky=tk.W+tk.E,
             **self.pad1.get("c"))
         
         self.bits_G_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
         self.bits_G_e.set(16)
-        self.bits_G_e.set_min_value(2)
+        self.bits_G_e.set_min_value(1)
         self.bits_G_e.set_max_value(16)
         self.bits_G_e.grid(row=row_n, column=2, sticky=tk.W+tk.E,
             **self.pad1.get("c"))
         
         self.bits_B_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
         self.bits_B_e.set(16)
-        self.bits_B_e.set_min_value(2)
+        self.bits_B_e.set_min_value(1)
         self.bits_B_e.set_max_value(16)
         self.bits_B_e.grid(row=row_n, column=3, sticky=tk.W+tk.E,
             **self.pad1.get("e"))
@@ -528,6 +528,10 @@ class GUI(tk.Tk) :
             # size
             if (self.input_canvas.filename != previous_filename or 
                 (old_x != new_x or old_y != new_y)) :
+                self.proc_mode_sv.set(self.image_processor.default_proc_mode_name)
+                self.comp_mode_sv.set(self.image_processor.default_comp_mode_name)
+                self.prev_proc_mode = self.image_processor.default_proc_mode_name
+                self.prev_comp_mode = self.image_processor.default_comp_mode_name
                 self.out_res_le.set_buffer("orig", (new_x, new_y))
                 self.update_all_res_entries(new_x, new_y)
                 self.update_proc_mode()
@@ -562,6 +566,11 @@ class GUI(tk.Tk) :
             self.input_canvas.resize_image(x, y, 
                 interpolation_modes[self.interp_mode_sv.get()])
             self.out_res_le.set_buffer("orig", (x, y))
+            self.out_res_le.set_buffer("ref", (x, y))
+            if (self.comp_mode_sv.get() == 
+                self.image_processor.GBC_comp_mode_name) :
+                self.out_res_le.set_buffer("GBC", (x, y))
+                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
             self.update_undo_b()
             self.update_proc_mode()
@@ -571,6 +580,11 @@ class GUI(tk.Tk) :
             x = self.input_canvas.undo_buffer.width
             y = self.input_canvas.undo_buffer.height
             self.out_res_le.set_buffer("orig", (x, y))
+            self.out_res_le.set_buffer("ref", (x, y))
+            if (self.comp_mode_sv.get() == 
+                self.image_processor.GBC_comp_mode_name) :
+                self.out_res_le.set_buffer("GBC", (x, y))
+                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
         self.input_canvas.undo()
         self.update_undo_b()
@@ -628,6 +642,11 @@ class GUI(tk.Tk) :
             x = self.input_canvas.image_no_zoom_PIL.width
             y = self.input_canvas.image_no_zoom_PIL.height
             self.out_res_le.set_buffer("orig", (x, y))
+            self.out_res_le.set_buffer("ref", (x, y))
+            if (self.comp_mode_sv.get() == 
+                self.image_processor.GBC_comp_mode_name) :
+                self.out_res_le.set_buffer("GBC", (x, y))
+                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
             self.update_proc_mode()
 
@@ -636,6 +655,11 @@ class GUI(tk.Tk) :
             x = self.input_canvas.undo_buffer.width
             y = self.input_canvas.undo_buffer.height
             self.out_res_le.set_buffer("orig", (x, y))
+            self.out_res_le.set_buffer("ref", (x, y))
+            if (self.comp_mode_sv.get() == 
+                self.image_processor.GBC_comp_mode_name) :
+                self.out_res_le.set_buffer("GBC", (x, y))
+                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
         self.input_canvas.undo()
         self.update_undo_b()
@@ -672,7 +696,6 @@ class GUI(tk.Tk) :
                 self.out_res_le.reset_from_buffer("orig")
 
             if comp_mode == self.image_processor.GBC_comp_mode_name :
-                self.out_res_le.set_buffer("GBC")
                 self.out_res_le.set((160, 144))
                 self.out_res_le.disable()
             else : 
@@ -697,10 +720,6 @@ class GUI(tk.Tk) :
             self.tile_size_e_y.grid(row=row_n, column=2,
                 sticky=tk.W+tk.E, **self.pad1.get("e"))
 
-            if (self.prev_proc_mode == 
-                self.image_processor.default_proc_mode_name) :
-                self.out_res_le.set_buffer("orig")
-
             self.out_res_le.disable()
             self.out_res_le.hide_aspect_ratio_b()
             self.out_res_le.free_slave()
@@ -711,20 +730,23 @@ class GUI(tk.Tk) :
             if self.input_canvas.image :
                 if (self.out_res_le.valid() and self.tile_size_e_x.valid
                     and self.tile_size_e_y.valid) :
-                    x = int(np.floor(self.out_res_le.buffers["ref"][0]/
-                        self.tile_size_e_x.value))
-                    y = int(np.floor(self.out_res_le.buffers["ref"][1]/
-                        self.tile_size_e_y.value))
+                    if (comp_mode == self.image_processor.GBC_comp_mode_name):
+                        x = int(np.floor(160/self.tile_size_e_x.value))
+                        y = int(np.floor(144/self.tile_size_e_y.value))
+                    else :
+                        x = int(np.floor(self.out_res_le.buffers["ref"][0]/
+                            self.tile_size_e_x.value))
+                        y = int(np.floor(self.out_res_le.buffers["ref"][1]/
+                            self.tile_size_e_y.value))
                     self.tiles_grid_le.set((x, y))
 
             if comp_mode == self.image_processor.GBC_comp_mode_name :
-                self.tiles_grid_le.set_buffer("GBC")
-                self.out_res_le.set_buffer("GBC")
                 self.out_res_le.set((160, 144))
                 self.out_res_le.disable()
 
     def on_comp_mode(self, *args, **kwargs) :
         comp_mode = self.comp_mode_sv.get()
+        proc_mode = self.proc_mode_sv.get()
         if (self.prev_comp_mode != comp_mode) :
             self.update_comp_mode(**kwargs)
         self.prev_comp_mode = comp_mode  
@@ -733,7 +755,10 @@ class GUI(tk.Tk) :
         comp_mode = self.comp_mode_sv.get()
         proc_mode = self.proc_mode_sv.get()
 
-        if (self.prev_comp_mode != comp_mode) :
+        if ((comp_mode == self.image_processor.GBC_comp_mode_name and 
+            isinstance(self.tile_size_e_x, vk.IntEntry)) or 
+            (comp_mode == self.image_processor.default_comp_mode_name and 
+            isinstance(self.tile_size_e_x, vk.IntOptionMenu))) :
             row_name = "Tile size"
             row_n = self.ctrl_rows[row_name]
             self.tile_size_e_x.grid_forget()
@@ -762,7 +787,8 @@ class GUI(tk.Tk) :
             self.bits_R_e.disable()
             self.bits_G_e.disable()
             self.bits_B_e.disable()
-            self.tiles_grid_le.set_buffer("GBC")
+            if (proc_mode == self.image_processor.tiled_proc_mode_name) :
+                self.tiles_grid_le.set_buffer("GBC")
             self.out_res_le.set_buffer("GBC")
             self.tiles_grid_le.set((20, 18))
             self.tiles_grid_le.disable()
@@ -780,8 +806,11 @@ class GUI(tk.Tk) :
             self.tiles_grid_le.enable()
             if  (proc_mode == self.image_processor.default_proc_mode_name) :
                 self.out_res_le.enable()
-            self.tiles_grid_le.reset_from_buffer("GBC")
+            else :
+                self.tiles_grid_le.reset_from_buffer("GBC")
+                self.tiles_grid_le.set_buffer("ref")
             self.out_res_le.reset_from_buffer("GBC")
+            self.out_res_le.set_buffer("ref")
 
     def on_write_tile_size_x(self, *args) :
         self.tile_size_e_x.on_write()
@@ -806,14 +835,14 @@ class GUI(tk.Tk) :
         
         prev_state = self.tiles_grid_le.aspect_ratio_b.toggled
         if prev_state == True :
-            self.tiles_grid_le.toggle_aspect_ratio_off() #on_toggle_aspect_ratio()
+            self.tiles_grid_le.toggle_aspect_ratio_off()
         self.tiles_grid_le.disable_auto_write_buffer()
         self.out_res_le.disable_auto_write_buffer()
         self.tiles_grid_le.set_y(y)
         self.tiles_grid_le.enable_auto_write_buffer("ref")
         self.out_res_le.enable_auto_write_buffer("ref")
         if prev_state == True :
-            self.tiles_grid_le.toggle_aspect_ratio_on()#.on_toggle_aspect_ratio()
+            self.tiles_grid_le.toggle_aspect_ratio_on()
     
     def on_write_pixel_size(self, *args) :
         self.pixel_size_e.on_write(args)

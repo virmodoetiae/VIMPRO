@@ -37,7 +37,7 @@ class KMeans :
         self.clusters = []
         self.weights = []
         
-        self.max_iters = kwargs.get("maxiters", 100)
+        self.max_iters = kwargs.get("maxiters", 200)
         self.min_rel_epsilon = (1.0/3.0)**(kwargs.get("fidelity", 10)-1)
         
         self.print_info = kwargs.get("printinfo", False)

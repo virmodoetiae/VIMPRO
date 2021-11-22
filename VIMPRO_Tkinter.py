@@ -668,10 +668,8 @@ class ResolutionLabelEntry :
 
     def enable_auto_write_buffer(self, buffer_name) :
         self.auto_write_buffer = buffer_name
-        #self.buffers[self.auto_write_buffer] = (self.x_e.value, self.y_e.value)
 
     def disable_auto_write_buffer(self) :
-        #self.buffers[self.auto_write_buffer] = None
         self.auto_write_buffer = None
 
     def set_buffer(self, i, t=None) :
