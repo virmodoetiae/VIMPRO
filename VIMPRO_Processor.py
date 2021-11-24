@@ -19,6 +19,9 @@
 import time
 import numpy as np
 from PIL import Image, ImageOps, ImageTk
+from tkinter.filedialog import askopenfile, asksaveasfile
+
+import VIMPRO_Data as vd
 
 ### CLASSES ###################################################################
 
@@ -146,6 +149,14 @@ class ImageProcessor :
         self.GBC_comp_mode_name = "Game Boy Color"
         self.comp_modes = [self.default_comp_mode_name, 
             self.GBC_comp_mode_name]
+
+        self.proc_mode_sv = None
+        self.comp_mode_sv = None
+
+        self.output_is_GBC_compatible = False
+        self.GBC_palette_map = None
+        self.tile_size = None
+        self.asm_source = None
     
     def best_palette_avg_norm(self, data, palettes) :
         if palettes.shape[0] > 1 :
@@ -173,13 +184,15 @@ class ImageProcessor :
     def convert_color_bits(self, array, rgb_bits, unique=False) :
         if rgb_bits == [16, 16, 16] :
             return array
-        scale_8_bit = np.array([float(2**(rgb_bits[0]-1))/255.0, 
-            float(2**(rgb_bits[1]-1))/255.0, float(2**(rgb_bits[2]-1))/255.0])
+        bit_scale = np.array([
+            float((2**(rgb_bits[0])-1))/255.0, 
+            float((2**(rgb_bits[1])-1))/255.0, 
+            float((2**(rgb_bits[2])-1))/255.0])
         if unique :
             return np.unique(np.rint(np.divide(np.rint(np.multiply(
-                array, scale_8_bit)), scale_8_bit)), axis=0)
+                array, bit_scale)), bit_scale)), axis=0)
         return np.rint(np.divide(np.rint(np.multiply(
-                array, scale_8_bit)), scale_8_bit))
+                array, bit_scale)), bit_scale))
 
     def crop(self, im, target_aspect_ratio) :
         width, height = im.size
@@ -196,20 +209,21 @@ class ImageProcessor :
             im = im.crop(border)
         return im
 
-    def replace_from_palette(self, data, palette) :
-        # First, construct argmin_dists which is a 1-D array of size 
-        #data.shape[0] wherein each element consists of the index of the 
-        # corresponding palette color that best approximates the corresponding
-        # element in data
+    def data_to_palette_index_map(self, data, palette) :
+        # Returns a 1-D array of size data.shape[0] wherein each element 
+        # consists of the index of the corresponding palette color that best
+        # approximates the corresponding element in data
         dists = np.zeros((data.shape[0], 0))
         for i, palette_color in enumerate(palette) :
             d = np.linalg.norm((palette_color-data), axis=1)
             dists = np.insert(dists, i, d, axis=1)
-        argmin_dists = np.argmin(dists, axis=1)
-        # Now, do the actual substitution in data. Would be great if I could
-        # rid of the second for, but oh, for now it's fine
+        return np.argmin(dists, axis=1)
+
+    def replace_from_palette(self, data, palette) :
+        palette_index_map = self.data_to_palette_index_map(data, palette)
         for i, palette_color in enumerate(palette) :
-            indices = np.where(argmin_dists == i)[0]*palette_color.shape[0]
+            indices = np.where(
+                palette_index_map == i)[0]*palette_color.shape[0]
             for j in range(palette_color.shape[0]) :
                 data.put((indices+j), palette_color[j])
         return data
@@ -238,7 +252,7 @@ class ImageProcessor :
         data = np.array(kmeans_image)
         data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
         k_means = KMeans(data=data, k=palette_size, fidelity=fidelity, 
-            printinfo=True)
+            printinfo=False)
 
         # Prepare output image (cropping and such)
         output_image = self.input_canvas.image_no_zoom_PIL_RGB.copy()
@@ -259,6 +273,17 @@ class ImageProcessor :
         # Convert back to image and draw to canvas
         output_image = Image.fromarray(data)
         self.output_canvas.set_zoom_draw_image(output_image)
+
+        # Set self.GBC_palette_map if in GBC_comp_mode
+        if self.comp_mode == self.GBC_comp_mode_name :
+            self.GBC_palette_map = [
+                [k_means.means for i in range(20)] for i in range(18)]
+            self.palettes = np.array([k_means.means])
+            self.tile_size = (8, 8) # Useless, I keep it for consistency
+        else :
+            self.GBC_palette_map = None
+            self.palettes = None
+            self.tile_size = None
 
     def process_tiled(self, **kwargs) :
         #n_palettes = kwargs["npalettes"]
@@ -288,14 +313,12 @@ class ImageProcessor :
         input_image = input_image.resize((int(out_x*min(scale, 1.0)), 
             int(out_y*min(1.0, scale))), resample=Image.LANCZOS)
         data = np.array(input_image)
-        #data = data.reshape(data.shape[0]*data.shape[1], 
-        #    data.shape[2])
 
         # Determine palettes
         palettes = []
         dy = np.floor(data.shape[0]/palettes_grid_y)
         dx = np.floor(data.shape[1]/palettes_grid_x)
-        start_time = time.perf_counter()
+        #start_time = time.perf_counter()
         for i in range(palettes_grid_y) :
             start_y = int(dy*i)
             end_y = int(dy*(i+1))
@@ -317,20 +340,27 @@ class ImageProcessor :
                     rgb_bits)
                 palettes.append(k_means.means)
         palettes = np.asarray(palettes)
-        print("Dt k-means =", (time.perf_counter()-start_time))
+        #print("Dt k-means =", (time.perf_counter()-start_time))
+
+        if self.comp_mode == self.GBC_comp_mode_name :
+            self.GBC_palette_map = [
+                [None for i in range(out_t_x)] for i in range(out_t_y)]
+            self.palettes = palettes.copy()
+            self.tile_size = (t_x, t_y)
+        else :
+            self.GBC_palette_map = None
+            self.palettes = None
+            self.tile_size = None
 
         # Determine best palette for each tile. This is done or downsampled
         # tiles of 16x16. Then, perform the color quantization and assemble
         # the output image from the processed tiles
-        best_palettes = []
         max_tile_pixels = 16*16
-        start_time = time.perf_counter()
+        #start_time = time.perf_counter()
         out = np.empty((0, out_x, 3))
         for j in range(out_t_y) :
             hout = np.empty((t_y, 0, 3))
             for i in range(out_t_x) :
-                I = i*t_x
-                J = j*t_y
                 box = (i*t_x, j*t_y, (i+1)*t_x, (j+1)*t_y)
                 tile = output_image.crop(box)
                 proc_tile = tile.copy()
@@ -343,6 +373,8 @@ class ImageProcessor :
                 best_palette = self.best_palette_avg_norm(
                     data.reshape(data.shape[0]*data.shape[1], data.shape[2]),
                     palettes)
+                if self.comp_mode == self.GBC_comp_mode_name :
+                    self.GBC_palette_map[j][i] = best_palette
                 data = np.array(tile)
                 orig_shape = data.shape
                 self.replace_from_palette(
@@ -351,21 +383,315 @@ class ImageProcessor :
                 data = data.reshape(orig_shape)
                 hout = np.hstack((hout, data))
             out = np.vstack((out, hout))
-        print("Dt substitution =", (time.perf_counter()-start_time))
-        
+        #print("Dt substitution =", (time.perf_counter()-start_time))
+
         # Convert back to image and draw to canvas
         output_image = Image.fromarray(out.astype(np.uint8))
         self.output_canvas.set_zoom_draw_image(output_image)
 
     def process(self, **kwargs) :
+        self.proc_mode = self.proc_mode_sv.get()
+        self.comp_mode = self.comp_mode_sv.get()
 
-        proc_mode = kwargs["procmode"]
-        if proc_mode == self.default_proc_mode_name :
+        if (self.comp_mode == self.GBC_comp_mode_name and 
+            self.proc_mode == self.tiled_proc_mode_name) :
+            if kwargs["palettesgridsize"][0]*kwargs["palettesgridsize"][1] > 8:
+                print("Cannot run processor in Game Boy Color compatibility \
+                        mode if the total palettes grid size (x*y) exceeds 8")
+                return
+
+        if self.proc_mode == self.default_proc_mode_name :
             self.process_default(**kwargs)
-        elif proc_mode == self.tiled_proc_mode_name :
+        elif self.proc_mode == self.tiled_proc_mode_name :
             self.process_tiled(**kwargs)
+
+        # Missing check on whether the actual processing succeeded, the
+        # self.output_is_GBC_compatible should only be true in that case
+        if self.comp_mode == self.GBC_comp_mode_name :
+            self.output_is_GBC_compatible = True
+        else :
+            self.output_is_GBC_compatible = False
 
         # Copy filename and path from input canvas to enable saving the image
         # from the output canvas
         self.output_canvas.filename = self.input_canvas.filename
         self.output_canvas.filepath = self.input_canvas.filepath
+
+    '''
+    This function converts the output_image and converts it to a Game Boy 
+    Color format. By that, I mean that the script produces a complete Game Boy
+    Color assembly source code file (i.e. .asm) that can that be compiled with
+    the free RGBDS package https://github.com/rednex/rgbds. In particular, once
+    the RGBDS package is installed, the .asm source file (assuming its is 
+    called main.asm) can be compiled via issuing:
+        rgbasm.exe -o main.o main.asm
+        rgblink.exe -o main.gb main.o
+        rgbfix -C -v -p 0 main.gb <= the C option denots a GBC ROM instead of a
+                                     GB ROM, it will not compile properly 
+                                     without it!
+    Please note that the source written by this function in the current state
+    is rather cumbersome, as there is absolutely no compression of any sorts,
+    meaning that all the (20*18=) 360 tiles are written in spite of potential
+    (and generally there always are) duplicates. This will be improved in the
+    future
+    '''
+    def export_asm(self) :
+        if not(self.output_is_GBC_compatible) :
+                return
+
+        t_x = self.tile_size[0]
+        t_y = self.tile_size[1]
+
+        def GBC_hex_format(h) :
+            if len(h) == 1 :
+                return "$0"+h
+            else :
+                return "$"+h
+
+        # Check palettes map dimensions, and if not equal to adequate GBC ones,
+        # "stretch" it
+        self.GBC_palette_map = np.array(self.GBC_palette_map)
+        x_shape = self.GBC_palette_map.shape[1]
+        y_shape = self.GBC_palette_map.shape[0]
+        if x_shape != 20 : 
+            hout = np.empty((y_shape, 0, 4, 3))
+            n = int(t_x/8)
+            for col in range(x_shape) :
+                for i in range(n) :
+                    hout = np.hstack((hout, 
+                        self.GBC_palette_map[:,col].reshape(y_shape, 1, 4, 3)))
+            self.GBC_palette_map = hout.copy()
+            x_shape = self.GBC_palette_map.shape[1]
+        if y_shape != 18 : 
+            vout = np.empty((0, x_shape, 4, 3))
+            n = int(t_y/8)
+            for row in range(y_shape) :
+                for i in range(n) :
+                    vout = np.vstack((vout, 
+                        self.GBC_palette_map[row,:].reshape(1, x_shape, 4, 3)))
+            self.GBC_palette_map = vout.copy()
+            y_shape = self.GBC_palette_map.shape[0]
+
+        output_image = self.output_canvas.image_no_zoom_PIL_RGB.copy()
+
+        palettes_indices = []
+        tiles = []
+        for j in range(18) :
+            for i in range(20) :
+                palette = self.GBC_palette_map[j][i]
+                lpalette = palette.tolist()
+                palettes_indices.append(
+                    self.palettes.tolist().index(palette.tolist()))
+
+                box = (i*8, j*8, (i+1)*8, (j+1)*8)
+                tile = output_image.crop(box)
+                tile = np.array(tile)
+                # tile_palette_index is an 8x8 array just like tile. The tile
+                # array is such that each [j,i] element contains an rgb color.
+                # tile_palette_index instead is such that each [j,i] element
+                # is an integer between 0 and 3 that represents one of the four
+                # colors in palette. In particular, that number is the index
+                # of the color in the palette list that corresponds to the 
+                # color in position [j,i] of tile.
+                tile_palette_index = self.data_to_palette_index_map(
+                    tile.reshape(tile.shape[0]*tile.shape[1], tile.shape[2]), 
+                    palette).reshape(tile.shape[0], tile.shape[1])
+
+                '''
+                Quick reminder on how Game Boy (Color or not) tiles work.
+                All of the graphics is based on 8x8 pixel tiles. Each tile is a
+                collection of numbers ranging from 0 to 3, representing one of
+                the four possible colors a pixel can assume. The actual color
+                value (in hex RGB 555 format) is stored elsewhere, in a map
+                that indicats which tile uses which palette (i.e. which set of 
+                four colors). The big difference between the Game Boy and the 
+                Game Boy Color is that the former supports only one palette for
+                all tiles (and you cannot really change it, it is white, black,
+                and two shades of gray), while the latter supports a maximum of
+                8 different color palettes. Regardless, the fundamental 
+                representation is the same. Take the following tile:
+
+                0 1 2 2 1 1 3 0
+                0 2 2 2 2 3 3 1
+                1 0 0 0 2 0 0 2
+                2 1 1 1 3 3 3 2
+                0 2 1 3 0 2 1 3
+                0 0 0 1 1 0 0 0
+                2 2 3 3 1 3 0 0
+                3 2 1 0 3 2 1 0
+                
+                The way this is stored is the following. For each line,
+                convert each number into a binary format and store the low and
+                the high bits for each number (there is only 2 bits as the 
+                numbers are in the 0-3 range) in separate arrays. Then convert
+                each array into hex numbers and store them in a little endian
+                way (the row of the low bits first, the row of the high bits
+                second). If this sounds confusing, let us make an example, let
+                us consider the first row:
+
+                0 1 2 2 1 1 3 0
+
+                After binary conversion, we have:
+
+                00 01 10 10 01 01 11 00
+
+                For each number, the first digit is the high bit, and the 
+                second digit is the low bit (). Now, store the low bits and 
+                high bits separately, so that:
+
+                low_bits =  [0 1 0 0 1 1 1 0]
+                high_bits = [0 0 1 1 0 0 1 0]
+
+                the low and high bits are then both translated into hex numbers
+                (the leading 0s are inconsequential but have been bracketed for
+                clarity) :
+
+                low_bits =  [0 1 0 0 1 1 1 0] = (0)1001110 = 0x4E
+                high_bits = [0 0 1 1 0 0 1 0] = (00)110010 = 0x32
+
+                Thus, the first row is converted into two hex numbers in the 
+                0-255 range. These two numbers are stored in memory in a little
+                endian way, so that the final representation of the first row
+                in memory is 0x4E 0x32 in two adjecent memory locations wherein
+                the address of the second is the adderss of the first + 1.
+                This is repeated for all 8 rows, so that each tiles is 
+                represented as 16 numbers in hex format in the 0-255 range 
+                stored in 16 adjacent memory addresses in a little endian 
+                format.
+                '''
+                tile = []
+                for row in tile_palette_index :
+                    # Get low and high bits in string binary format, then 
+                    # convert to hex, and pad with leading 0s if necessary
+                    low_bits = np.array2string(
+                        np.remainder(row, 2).astype(int), 
+                        separator="").lstrip("[").rstrip("]")
+                    high_bits = np.array2string(
+                        np.remainder(np.floor(row/2), 2).astype(int), 
+                        separator="").lstrip("[").rstrip("]")
+                    low_bits = format(int(low_bits, 2), "x").upper()
+                    high_bits = format(int(high_bits, 2), "x").upper()
+                    # The leading $ is the GB/GBC equivalent of 0x to denote
+                    # hexadecimal number
+                    low_bits = GBC_hex_format(low_bits)
+                    high_bits = GBC_hex_format(high_bits)
+                    tile.append(low_bits)
+                    tile.append(high_bits)
+                    #print(row, low_bits, high_bits)
+                tiles.append(tile)
+
+        # Write the source header, the only info it requires is the number of
+        # palettes that are present
+        self.asm_source = vd.fill_from_source_header_to_palettes_start(
+            len(self.palettes))
+
+        # Write palettes to source
+        for i, palette in enumerate(self.palettes) :
+            self.asm_source += ("               ; Palette "+str(i)+"\n")
+            for j, color in enumerate(palette) :
+                # This commented part was related to experimenting with
+                # darkening the palette, as the images on the GBC emulator
+                # (BGB) appear somewhat brighter than they should. Is it an
+                # issue on the emulator side, or on my conversion of colors
+                # to an RGB-555 format? The conversion is pretty 
+                # straightforward as you can see below, so I don't know.
+                # Edit, I tried other emulators and it seems to be a problem
+                # exclusive of the BGB emulator indeed!
+                # color = (color*0.75).astype(int)
+                color_hex_rgb555 = format(
+                    np.floor(color[0]/8).astype(int)+
+                    np.floor(color[1]/8).astype(int)*32+
+                    np.floor(color[2]/8).astype(int)*1024, "x").upper()
+                while len(color_hex_rgb555) < 4 :
+                    color_hex_rgb555 = "0"+color_hex_rgb555
+                hi_nibble = color_hex_rgb555[0]+color_hex_rgb555[1]
+                lo_nibble = color_hex_rgb555[2]+color_hex_rgb555[3]
+                color_line = ("    DB $"+lo_nibble+",$"+hi_nibble)
+                color_line += (" ; $ 16-bit RGB = "+
+                    np.array2string(np.array(color).astype(int))+"\n")
+                self.asm_source += color_line
+
+        # 
+        self.asm_source += vd.fill_from_palettes_end_to_bank0_tile_start()
+
+        # Write tiles to bank0
+        for i, tile in enumerate(tiles) :
+            if i < 256 :
+                self.asm_source += ("    DB ")
+                for j, line in enumerate(tile) :
+                    if j != 8 :
+                        self.asm_source += (line)
+                    else :
+                        lineNum = GBC_hex_format(format(i, "x").upper())
+                        self.asm_source += (" ; tile "+str(i)+" / "+
+                            lineNum+"\n"+"    DB "+line)
+                    if j < 15 and j != 7:
+                        self.asm_source += (",")
+                self.asm_source += ("\n")
+
+        #
+        self.asm_source += vd.fill_from_bank0_tile_end_to_bank1_tile_start()
+
+        # Write tiles that go to bank 1 of the tile map
+        for i, tile in enumerate(tiles) :
+            if i >= 256 :
+                self.asm_source += ("    DB ")
+                for j, line in enumerate(tile) :
+                    if j != 8 :
+                        self.asm_source += (line)
+                    else :
+                        lineNum = GBC_hex_format(format(i, "x").upper())
+                        self.asm_source += (" ; tile "+str(i)+" / "+
+                            lineNum+"\n"+"    DB "+line)
+                    if j < 15 and j != 7:
+                        self.asm_source += (",")
+                self.asm_source += ("\n")
+
+        #
+        self.asm_source += vd.fill_from_bank1_tile_end_to_bank0_map_start()
+
+        # Write actual map
+        for i in range(18) :
+            self.asm_source += ("    DB ")
+            for j in range(20) :
+                I = 20*i+j
+                if I >= 256 :
+                    I -= 256
+                n = GBC_hex_format(format(I, "x").upper())
+                if j != 10 :
+                    self.asm_source += (n)
+                else :
+                    self.asm_source += (" ; line "+str(i)+"\n"+"    DB "+n)
+                if j < 19 and j != 9 :
+                    self.asm_source += (",")
+            self.asm_source += ("\n")
+
+        self.asm_source += vd.fill_from_bank0_map_end_to_bank1_map_start()
+
+        # Write palette map
+        for i, palettes_index in enumerate(palettes_indices) :
+            if i%10 == 0 :
+                self.asm_source += ("    DB ")
+            # Bit 3 of pi set to 1 tells to use bg characters in bank1
+            # So, bin 00001000 == dec 8, and we need to add it to the palette 
+            # number
+            if i >= 256 :
+                pi = GBC_hex_format(format((palettes_index+8), "x").upper())
+            else :
+                pi = GBC_hex_format(format((palettes_index), "x").upper())
+            self.asm_source += (pi)
+            if (i+1)%10 != 0 :
+                self.asm_source += (",")
+            elif (i+1)%20 != 0:
+                self.asm_source += (" ; line "+str(np.floor(i/20).astype(int))+
+                    "\n")
+            else :
+                self.asm_source += ("\n")
+
+        self.asm_source += vd.fill_from_bank1_map_end_to_source_end()
+
+        file = asksaveasfile(mode='w', defaultextension=".asm",
+            initialfile="main", filetypes=[("Assembly source file", ".asm")])
+        file.write(self.asm_source)
+
+        self.asm_source = ""

@@ -291,6 +291,7 @@ class GUI(tk.Tk) :
             *self.image_processor.proc_modes, command=self.on_proc_mode)
         self.proc_mode_om.grid(row=row_n, column=1, columnspan=3,
             sticky=tk.W+tk.E, **self.pad1.get("e"))
+        self.image_processor.proc_mode_sv = self.proc_mode_sv
 
         # Compatibility mode
         row_name = "Compatibility mode"
@@ -307,6 +308,7 @@ class GUI(tk.Tk) :
             *self.image_processor.comp_modes, command=self.on_comp_mode)
         self.comp_mode_om.grid(row=row_n, column=1, columnspan=3,
             sticky=tk.W+tk.E, **self.pad1.get("e"))
+        self.image_processor.comp_mode_sv = self.comp_mode_sv
 
         # Palette size ---------------#
         row_name = "Palette size"
@@ -857,7 +859,7 @@ class GUI(tk.Tk) :
             appendstr="_VIMPRO_")
 
     def on_export_asm(self) :
-        pass
+        self.image_processor.export_asm()
 
     def on_main_window_resize(self, *args) :
         pass
@@ -909,9 +911,9 @@ class GUI(tk.Tk) :
                 self.tiles_grid_le.y_e.value)
 
         # Run processor
-        self.image_processor.process(procmode=proc_mode, palettesgridsize=
-            palettes_grid_size, palettesize=palette_size, rgbbits=rgb_bits, 
-            fidelity=fidelity, tilesize=tile_size, outsize=out_size)
+        self.image_processor.process(palettesgridsize=palettes_grid_size, 
+            palettesize=palette_size, rgbbits=rgb_bits, fidelity=fidelity, 
+            tilesize=tile_size, outsize=out_size)
 
         # Update output resolution of the possible save file
         self.update_save_resolution()

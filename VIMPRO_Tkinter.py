@@ -179,7 +179,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
                     self.filepath+filename)
                 i+=1
             file = asksaveasfile(mode='w', defaultextension=".png",
-                initialfile=filename, filetypes=[("PNG image file", ".png")],)
+                initialfile=filename, filetypes=[("PNG image file", ".png")])
             if not file :
                 return
             output_image = self.image_no_zoom_PIL.copy()
@@ -408,12 +408,18 @@ class IntEntry(tk.Entry) :
 
     def set_min_value(self, value) :
         self.min_value = value
-        if not self.valid :
+        if self.value :
+            if self.value < self.min_value :
+                self.sv.set(value)
+        else :
             self.sv.set(value)
 
     def set_max_value(self, value) :
         self.max_value = value
-        if not self.valid :
+        if self.value :
+            if self.value > self.max_value :
+                self.sv.set(value)
+        else :
             self.sv.set(value)
 
     def unset_min_value(self) :
