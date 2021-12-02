@@ -23,4 +23,5 @@ import VIMPRO_GUI as vg
 if __name__ == "__main__":
 
     VIMPRO = vg.GUI()
+    VIMPRO.eval('tk::PlaceWindow . center')
     VIMPRO.mainloop()

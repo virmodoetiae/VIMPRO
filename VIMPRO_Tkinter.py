@@ -728,7 +728,8 @@ class SelectionRectangle :
         self.coords_abs = [] # Absolute (i.e. with respect to canvas NW point)
         self.coords_rel = [] # Relative (i.e. with respect to image NW point)
         self.coords_rel_scaled = []
-        self.id = -1
+        self.id1 = -1
+        self.id2 = -1
         min_x = 0
         min_y = 0
         if "event" in kwargs :
@@ -739,12 +740,22 @@ class SelectionRectangle :
         max_y = min_y
         self.x0 = min_x
         self.y0 = min_y
-        self.id = canvas.create_line(
+        self.id1 = canvas.create_line(
             min_x, max_y, 
             max_x, max_y,
             max_x, min_y,
             min_x, min_y,
             min_x, max_y,
+            fill="black",
+            **kwargs)
+        self.id2 = canvas.create_line(
+            min_x, max_y, 
+            max_x, max_y,
+            max_x, min_y,
+            min_x, min_y,
+            min_x, max_y,
+            dash = "--",
+            fill="white",
             **kwargs)
         self.coords_abs = [min_x, min_y, max_x, max_y]
         min_x = self.canvas.canvasx(min_x)
@@ -754,7 +765,8 @@ class SelectionRectangle :
         self.coords_rel = [min_x, min_y, max_x, max_y]
 
     def delete(self) :
-        self.canvas.delete(self.id)
+        self.canvas.delete(self.id1)
+        self.canvas.delete(self.id2)
 
     def resize(self, event) :
         min_x = min(self.x0, event.x)
@@ -775,7 +787,13 @@ class SelectionRectangle :
             int(min_y/self.canvas.image_scale), 
             int(max_x/self.canvas.image_scale), 
             int(max_y/self.canvas.image_scale)]
-        self.canvas.coords(self.id,
+        self.canvas.coords(self.id1,
+            min_x, max_y, 
+            max_x, max_y,
+            max_x, min_y,
+            min_x, min_y,
+            min_x, max_y)
+        self.canvas.coords(self.id2,
             min_x, max_y, 
             max_x, max_y,
             max_x, min_y,

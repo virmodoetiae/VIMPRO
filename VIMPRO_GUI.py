@@ -379,11 +379,11 @@ class GUI(tk.Tk) :
         self.tile_size_e_x = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
         self.tile_size_e_x.set_min_value(1)
-        self.tile_size_e_x.set(8)
+        self.tile_size_e_x.set(32)
         self.tile_size_e_y = vk.IntEntry(self.ctrl_frame, 
             width=self.entry_width)
         self.tile_size_e_y.set_min_value(1)
-        self.tile_size_e_y.set(8)
+        self.tile_size_e_y.set(32)
 
         # These are the OptionMenus that are substituted to the tile_size_*
         # entries when in Game Boy Color compatibility mode
@@ -535,8 +535,10 @@ class GUI(tk.Tk) :
                 self.prev_proc_mode = self.image_processor.default_proc_mode_name
                 self.prev_comp_mode = self.image_processor.default_comp_mode_name
                 self.out_res_le.set_buffer("orig", (new_x, new_y))
+                self.out_res_le.set_buffer("GBC", (new_x, new_y))
                 self.update_all_res_entries(new_x, new_y)
                 self.update_proc_mode()
+                self.update_comp_mode()
             
             # Toggle aspect ratio locks on after loading
             self.resize_res_le.aspect_ratio_b.toggle_on()
@@ -554,10 +556,13 @@ class GUI(tk.Tk) :
                 sticky=tk.W+tk.E+tk.N+tk.S, **self.pad1.get("w", "xx", True))
         else :
             self.resize_frame.grid_forget()
-            self.resize_res_le.set((self.input_canvas.image_no_zoom_PIL.width,
-                self.input_canvas.image_no_zoom_PIL.height))
+            if self.input_canvas.image_no_zoom_PIL: 
+                self.resize_res_le.set((self.input_canvas.image_no_zoom_PIL.width,
+                    self.input_canvas.image_no_zoom_PIL.height))
 
     def on_resize(self) :
+        if not self.input_canvas.image_no_zoom_PIL:
+            return
         if not self.resize_res_le.valid() :
             print("Cannot resize image because of invalid target resolution")
             return
@@ -572,7 +577,9 @@ class GUI(tk.Tk) :
             if (self.comp_mode_sv.get() == 
                 self.image_processor.GBC_comp_mode_name) :
                 self.out_res_le.set_buffer("GBC", (x, y))
-                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
+                self.tiles_grid_le.set_buffer("GBC", (
+                    int(np.floor(x/self.tile_size_e_x.value)), 
+                    int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
             self.update_undo_b()
             self.update_proc_mode()
@@ -586,7 +593,9 @@ class GUI(tk.Tk) :
             if (self.comp_mode_sv.get() == 
                 self.image_processor.GBC_comp_mode_name) :
                 self.out_res_le.set_buffer("GBC", (x, y))
-                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
+                self.tiles_grid_le.set_buffer("GBC", (
+                    int(np.floor(x/self.tile_size_e_x.value)), 
+                    int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
         self.input_canvas.undo()
         self.update_undo_b()
@@ -607,8 +616,9 @@ class GUI(tk.Tk) :
                 self.on_selection_tool()
             self.input_canvas.delete_selection_rectangle()
             self.crop_frame.grid_forget()
-            self.crop_res_le.set((self.input_canvas.image_no_zoom_PIL.width,
-                self.input_canvas.image_no_zoom_PIL.height))
+            if self.input_canvas.image_no_zoom_PIL: 
+                self.crop_res_le.set((self.input_canvas.image_no_zoom_PIL.width,
+                    self.input_canvas.image_no_zoom_PIL.height))
 
     def on_selection_tool(self) :
         self.selection_tool_b.on_toggle_change()
@@ -619,6 +629,8 @@ class GUI(tk.Tk) :
             self.input_canvas.delete_selection_rectangle()
 
     def on_crop(self) :
+        if not self.input_canvas.image_no_zoom_PIL:
+            return
         selection_box = None
         flag = False
         if self.selection_tool_b.toggled :
@@ -648,7 +660,9 @@ class GUI(tk.Tk) :
             if (self.comp_mode_sv.get() == 
                 self.image_processor.GBC_comp_mode_name) :
                 self.out_res_le.set_buffer("GBC", (x, y))
-                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
+                self.tiles_grid_le.set_buffer("GBC", (
+                    int(np.floor(x/self.tile_size_e_x.value)), 
+                    int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
             self.update_proc_mode()
 
@@ -661,7 +675,9 @@ class GUI(tk.Tk) :
             if (self.comp_mode_sv.get() == 
                 self.image_processor.GBC_comp_mode_name) :
                 self.out_res_le.set_buffer("GBC", (x, y))
-                self.tiles_grid_le.set_buffer("GBC", (int(np.floor(x/self.tile_size_e_x.value)), int(np.floor(y/self.tile_size_e_y.value))))
+                self.tiles_grid_le.set_buffer("GBC", (
+                    int(np.floor(x/self.tile_size_e_x.value)), 
+                    int(np.floor(y/self.tile_size_e_y.value))))
             self.update_all_res_entries(x, y)
         self.input_canvas.undo()
         self.update_undo_b()
@@ -783,12 +799,9 @@ class GUI(tk.Tk) :
             self.palette_size_e.set_max_value(4)
             self.bits_buffer = (self.bits_R_e.value, self.bits_G_e.value, 
                 self.bits_B_e.value)
-            self.bits_R_e.set(5)
-            self.bits_G_e.set(5)
-            self.bits_B_e.set(5)
-            self.bits_R_e.disable()
-            self.bits_G_e.disable()
-            self.bits_B_e.disable()
+            self.bits_R_e.set_max_value(5)
+            self.bits_G_e.set_max_value(5)
+            self.bits_B_e.set_max_value(5)
             if (proc_mode == self.image_processor.tiled_proc_mode_name) :
                 self.tiles_grid_le.set_buffer("GBC")
             self.out_res_le.set_buffer("GBC")
@@ -799,12 +812,12 @@ class GUI(tk.Tk) :
 
         elif (comp_mode == self.image_processor.default_comp_mode_name) :
             self.palette_size_e.unset_max_value()
+            self.bits_R_e.unset_max_value()
+            self.bits_G_e.unset_max_value()
+            self.bits_B_e.unset_max_value()
             self.bits_R_e.set(self.bits_buffer[0])
             self.bits_G_e.set(self.bits_buffer[1])
             self.bits_B_e.set(self.bits_buffer[2])
-            self.bits_R_e.enable()
-            self.bits_G_e.enable()
-            self.bits_B_e.enable()
             self.tiles_grid_le.enable()
             if  (proc_mode == self.image_processor.default_proc_mode_name) :
                 self.out_res_le.enable()
@@ -870,7 +883,8 @@ class GUI(tk.Tk) :
         proc_mode =self.proc_mode_sv.get()
 
         # Check input data validity
-        if not self.input_canvas.image_id :
+        if (not self.input_canvas.image_id or 
+            not self.input_canvas.image_no_zoom_PIL):
             print("Cannot run processor because no input image loaded")
             return
         if not self.palette_size_e.valid :
