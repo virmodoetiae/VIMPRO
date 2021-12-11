@@ -474,14 +474,29 @@ class ImageProcessor :
 
         output_image = self.output_canvas.image_no_zoom_PIL_RGB.copy()
 
+        class GBTile :
+            def __init__(self, bits) :
+                self.bits = bits.copy()
+                self.id = ""
+                for b in reversed(self.bits) :
+                    self.id+=str(format(int(b, 2), "x"))
+                for i in range(len(self.bits)) :
+                    self.bits[i] = GBC_hex_format(
+                        format(int(self.bits[i], 2), "x").upper())
+            def __eq__(self, rhs) :
+                return self.id == rhs.id
+            def __ne__(self, rhs) :
+                return not (self==rhs)
+
         palettes_indices = []
+        tiles_indices = []
         tiles = []
         for j in range(18) :
             for i in range(20) :
                 palette = self.GBC_palette_map[j][i]
                 lpalette = palette.tolist()
-                palettes_indices.append(
-                    self.palettes.tolist().index(palette.tolist()))
+                palette_index = self.palettes.tolist().index(palette.tolist())
+                palettes_indices.append(palette_index)
 
                 box = (i*8, j*8, (i+1)*8, (j+1)*8)
                 tile = output_image.crop(box)
@@ -554,12 +569,12 @@ class ImageProcessor :
                 endian way, so that the final representation of the first row
                 in memory is 0x4E 0x32 in two adjecent memory locations wherein
                 the address of the second is the adderss of the first + 1.
-                This is repeated for all 8 rows, so that each tiles is 
+                This is repeated for all 8 rows, so that each tile is 
                 represented as 16 numbers in hex format in the 0-255 range 
                 stored in 16 adjacent memory addresses in a little endian 
                 format.
                 '''
-                tile = []
+                tile_bits = []
                 for row in tile_palette_index :
                     # Get low and high bits in string binary format, then 
                     # convert to hex, and pad with leading 0s if necessary
@@ -569,35 +584,33 @@ class ImageProcessor :
                     high_bits = np.array2string(
                         np.remainder(np.floor(row/2), 2).astype(int), 
                         separator="").lstrip("[").rstrip("]")
-                    low_bits = format(int(low_bits, 2), "x").upper()
-                    high_bits = format(int(high_bits, 2), "x").upper()
-                    # The leading $ is the GB/GBC equivalent of 0x to denote
-                    # hexadecimal number
-                    low_bits = GBC_hex_format(low_bits)
-                    high_bits = GBC_hex_format(high_bits)
-                    tile.append(low_bits)
-                    tile.append(high_bits)
-                    #print(row, low_bits, high_bits)
-                tiles.append(tile)
+                    tile_bits.append(low_bits)
+                    tile_bits.append(high_bits)
+                
+                # Add tile to tiles (i.e. pattern table) only if id did not
+                # already appear, and set the correct tile_index for this tile
+                # accordingly
+                tile = GBTile(tile_bits)
+                tile_index = None
+                for k, tilek in enumerate(tiles) :
+                    if tilek == tile :
+                        tile_index = k
+                        break
+                if tile_index == None :
+                    tiles.append(tile)
+                    tile_index = len(tiles)-1
+                tiles_indices.append(tile_index)
 
         # Write the source header, the only info it requires is the number of
-        # palettes that are present
+        # palettes that are present and info on whether the second memory bank
+        # for the tile table is necessary (only if I have more than 256 tiles)
         self.asm_source = vd.fill_from_source_header_to_palettes_start(
-            len(self.palettes))
+            len(self.palettes), len(tiles) > 256)
 
         # Write palettes to source
         for i, palette in enumerate(self.palettes) :
             self.asm_source += ("               ; Palette "+str(i)+"\n")
             for j, color in enumerate(palette) :
-                # This commented part was related to experimenting with
-                # darkening the palette, as the images on the GBC emulator
-                # (BGB) appear somewhat brighter than they should. Is it an
-                # issue on the emulator side, or on my conversion of colors
-                # to an RGB-555 format? The conversion is pretty 
-                # straightforward as you can see below, so I don't know.
-                # Edit, I tried other emulators and it seems to be a problem
-                # exclusive of the BGB emulator indeed!
-                # color = (color*0.75).astype(int)
                 color_hex_rgb555 = format(
                     np.floor(color[0]/8).astype(int)+
                     np.floor(color[1]/8).astype(int)*32+
@@ -618,7 +631,7 @@ class ImageProcessor :
         for i, tile in enumerate(tiles) :
             if i < 256 :
                 self.asm_source += ("    DB ")
-                for j, line in enumerate(tile) :
+                for j, line in enumerate(tile.bits) :
                     if j != 8 :
                         self.asm_source += (line)
                     else :
@@ -636,7 +649,7 @@ class ImageProcessor :
         for i, tile in enumerate(tiles) :
             if i >= 256 :
                 self.asm_source += ("    DB ")
-                for j, line in enumerate(tile) :
+                for j, line in enumerate(tile.bits) :
                     if j != 8 :
                         self.asm_source += (line)
                     else :
@@ -654,7 +667,7 @@ class ImageProcessor :
         for i in range(18) :
             self.asm_source += ("    DB ")
             for j in range(20) :
-                I = 20*i+j
+                I = tiles_indices[20*i+j]
                 if I >= 256 :
                     I -= 256
                 n = GBC_hex_format(format(I, "x").upper())
@@ -666,6 +679,7 @@ class ImageProcessor :
                     self.asm_source += (",")
             self.asm_source += ("\n")
 
+        #
         self.asm_source += vd.fill_from_bank0_map_end_to_bank1_map_start()
 
         # Write palette map
@@ -675,7 +689,7 @@ class ImageProcessor :
             # Bit 3 of pi set to 1 tells to use bg characters in bank1
             # So, bin 00001000 == dec 8, and we need to add it to the palette 
             # number
-            if i >= 256 :
+            if tiles_indices[i] >= 256 :
                 pi = GBC_hex_format(format((palettes_index+8), "x").upper())
             else :
                 pi = GBC_hex_format(format((palettes_index), "x").upper())
@@ -688,10 +702,13 @@ class ImageProcessor :
             else :
                 self.asm_source += ("\n")
 
+        #
         self.asm_source += vd.fill_from_bank1_map_end_to_source_end()
 
         file = asksaveasfile(mode='w', defaultextension=".asm",
             initialfile="main", filetypes=[("Assembly source file", ".asm")])
-        file.write(self.asm_source)
-
+        if file :
+            file.write(self.asm_source)
+        
+        # Clear source after saving file
         self.asm_source = ""

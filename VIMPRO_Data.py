@@ -38,8 +38,10 @@ icon_image = Image.frombytes("RGBA", (52,52),
 
 ### GAME BOY COLOR SOURCE BOILERPLATES ########################################
 
-# n is the number of palettes
-def fill_from_source_header_to_palettes_start(n) :
+# n is the number of palettes, bank1 is a flag to indicate whether the number
+# of tiles to be registered in the tileTable is greater than 256, which means
+# that bank1 of the tile table should be used as well to store the excess tiles
+def fill_from_source_header_to_palettes_start(n, bank1) :
     lines = ""
     lines += ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;\n"
     lines += ";;                                                                           ;;\n"
@@ -194,29 +196,30 @@ def fill_from_source_header_to_palettes_start(n) :
     lines += "    ld [$FF40], a\n\n"
     lines += "    ; Load tiles to bank 0 of tile table\n"
     lines += "    ld hl, $8000\n"
-    lines += "    ld de, bgBank0TilesStart\n"
-    lines += "    ld bc, bgBank0TilesEnd - bgBank0TilesStart\n"
+    lines += "    ld de, tileTableBank0Start\n"
+    lines += "    ld bc, tileTableBank0End - tileTableBank0Start\n"
     lines += "    call loadAddressInc\n\n"
-    lines += "    ; Load tiles to bank 1 of tile table\n"
-    lines += "    ld a, 1\n"
-    lines += "    ld [$FF4F], a\n"
-    lines += "    ld hl, $8000\n"
-    lines += "    ld de, bgBank1TilesStart\n"
-    lines += "    ld bc, bgBank1TilesEnd - bgBank1TilesStart\n"
-    lines += "    call loadAddressInc\n\n"
+    if (bank1) :
+        lines += "    ; Load tiles to bank 1 of tile table\n"
+        lines += "    ld a, 1\n"
+        lines += "    ld [$FF4F], a\n"
+        lines += "    ld hl, $8000\n"
+        lines += "    ld de, tileTableBank1Start\n"
+        lines += "    ld bc, tileTableBank1End - tileTableBank1Start\n"
+        lines += "    call loadAddressInc\n\n"
     lines += "    ; Draw tiles to screen (bank0 of VRAM)\n"
     lines += "    xor a\n"
     lines += "    ld [$FF4F], a\n"
     lines += "    ld hl, $9800\n"
-    lines += "    ld de, bank0MapStart\n"
-    lines += "    ld bc, bank0MapEnd-bank0MapStart\n"
+    lines += "    ld de, tileMapStart\n"
+    lines += "    ld bc, tileMapEnd-tileMapStart\n"
     lines += "    call loadToScreen\n\n"
     lines += "    ; Set tiles palette map ( bank1 of VRAM )\n"
     lines += "    ld a, 1\n"
     lines += "    ld [$FF4F], a\n"
     lines += "    ld hl, $9800\n"
-    lines += "    ld de, bank1MapStart\n"
-    lines += "    ld bc, bank1MapEnd-bank1MapStart\n"
+    lines += "    ld de, palettesMapStart\n"
+    lines += "    ld bc, palettesMapEnd-palettesMapStart\n"
     lines += "    call loadToScreen\n\n"
     lines += "    ; Screen on\n"
     lines += "    ld a, %10010011\n"
@@ -238,30 +241,30 @@ def fill_from_palettes_end_to_bank0_tile_start() :
     lines = ""
     lines += "palettesEnd:\n\n"
     lines += "SECTION \"Tiles\", ROM0 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;\n\n"
-    lines += "bgBank0TilesStart:\n"
+    lines += "tileTableBank0Start:\n"
     return lines
 
 def fill_from_bank0_tile_end_to_bank1_tile_start() :
     lines = ""
-    lines += "bgBank0TilesEnd:\n\n"
-    lines += "bgBank1TilesStart:\n"
+    lines += "tileTableBank0End:\n\n"
+    lines += "tileTableBank1Start:\n"
     return lines
 
 def fill_from_bank1_tile_end_to_bank0_map_start() :
     lines = ""
-    lines += "bgBank1TilesEnd:\n\n"
+    lines += "tileTableBank1End:\n\n"
     lines += "SECTION \"Maps\", ROM0  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;\n\n"
-    lines += "bank0MapStart:\n"
+    lines += "tileMapStart:\n"
     return lines
 
 def fill_from_bank0_map_end_to_bank1_map_start() :
     lines = ""
-    lines += "bank0MapEnd:\n\n"
-    lines += "bank1MapStart:\n"
+    lines += "tileMapEnd:\n\n"
+    lines += "palettesMapStart:\n"
     return lines
 
 def fill_from_bank1_map_end_to_source_end() :
     lines = ""
-    lines += "bank1MapEnd:\n\n"
+    lines += "palettesMapEnd:\n\n"
     lines += ";;; SOURCE END ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
     return lines
