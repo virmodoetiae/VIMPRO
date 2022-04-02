@@ -187,7 +187,8 @@ class ImageProcessor :
         bit_scale = np.array([
             float((2**(rgb_bits[0])-1))/255.0, 
             float((2**(rgb_bits[1])-1))/255.0, 
-            float((2**(rgb_bits[2])-1))/255.0])
+            float((2**(rgb_bits[2])-1))/255.0,
+            1.0])
         if unique :
             return np.unique(np.rint(np.divide(np.rint(np.multiply(
                 array, bit_scale)), bit_scale)), axis=0)
@@ -357,9 +358,9 @@ class ImageProcessor :
         # the output image from the processed tiles
         max_tile_pixels = 16*16
         #start_time = time.perf_counter()
-        out = np.empty((0, out_x, 3))
+        out = np.empty((0, out_x, 4))
         for j in range(out_t_y) :
-            hout = np.empty((t_y, 0, 3))
+            hout = np.empty((t_y, 0, 4))
             for i in range(out_t_x) :
                 box = (i*t_x, j*t_y, (i+1)*t_x, (j+1)*t_y)
                 tile = output_image.crop(box)
@@ -454,21 +455,21 @@ class ImageProcessor :
         x_shape = self.GBC_palette_map.shape[1]
         y_shape = self.GBC_palette_map.shape[0]
         if x_shape != 20 : 
-            hout = np.empty((y_shape, 0, 4, 3))
+            hout = np.empty((y_shape, 0, 4, 4))
             n = int(t_x/8)
             for col in range(x_shape) :
                 for i in range(n) :
                     hout = np.hstack((hout, 
-                        self.GBC_palette_map[:,col].reshape(y_shape, 1, 4, 3)))
+                        self.GBC_palette_map[:,col].reshape(y_shape, 1, 4, 4)))
             self.GBC_palette_map = hout.copy()
             x_shape = self.GBC_palette_map.shape[1]
         if y_shape != 18 : 
-            vout = np.empty((0, x_shape, 4, 3))
+            vout = np.empty((0, x_shape, 4, 4))
             n = int(t_y/8)
             for row in range(y_shape) :
                 for i in range(n) :
                     vout = np.vstack((vout, 
-                        self.GBC_palette_map[row,:].reshape(1, x_shape, 4, 3)))
+                        self.GBC_palette_map[row,:].reshape(1, x_shape, 4, 4)))
             self.GBC_palette_map = vout.copy()
             y_shape = self.GBC_palette_map.shape[0]
 

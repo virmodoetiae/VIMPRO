@@ -117,15 +117,17 @@ class GUI(tk.Tk) :
             **self.pad0.get("ne"))
         self.frames.append(self.ctrl_frame)
         n_cols = 5
-        self.ctrl_rows = {"Input options" : 0, "Load image" : 1, 
-            "Resize tool" : 2, "Crop tool" : 3, "Processing options" : 4, 
-            "Processor mode" : 5,  "Compatibility mode" : 6, 
-            "Palettes search grid size" : 7, "Palette size" : 8, 
-            "Bits per channel (R,G,B)" : 9, "Fidelity" : 10, "Tile size" : 11, 
-            "Tiles grid size" : 12, "Output resolution" : 12+1, 
-            "Process image" : 13+1, "Save & export options" : 14+1, 
-            "Pixel size" : 15+1, "Final resolution" : 16+1,
-            "Save image" : 17+1, "Export .asm source" : 18+1}
+        row_names = ["Input options", "Load image", "Resize tool", "Crop tool",
+        "Rotate by",
+        "Processing options", "Processor mode", "Compatibility mode", 
+        "Palettes search grid size", "Palette size", 
+        "Bits per channel (R,G,B)", "Fidelity", "Tile size", "Tiles grid size",
+        "Output resolution", "Process image", "Save & export options", 
+        "Pixel size", "Final resolution", "Save image", "Export .asm source"
+        ]
+        self.ctrl_rows = {}
+        for i, name in enumerate(row_names) :
+            self.ctrl_rows[name] = i
 
         # Input options ------------------------------------------------------#
         row_name = "Input options"
@@ -196,7 +198,7 @@ class GUI(tk.Tk) :
         self.open_crop_b = vk.ToggleButton(self.ctrl_frame, text=row_name,
             width=self.button_width, command=self.on_open_crop)
         self.open_crop_b.grid(row=row_n, column=0, sticky=tk.W+tk.E+tk.N,
-            **self.pad1.get("sw", "xx"))
+            **self.pad1.get("w", "xx"))
 
         # Crop frame
         self.crop_frame = tk.LabelFrame(self.ctrl_frame)
@@ -239,6 +241,22 @@ class GUI(tk.Tk) :
             command=self.on_undo_crop)
         self.undo_crop_b.grid(row=0, column=2,
             sticky=tk.W+tk.E+tk.N, **self.pad1.get("se"))
+
+        # Rotate tool ----------------#
+        row_name = "Rotate by"
+        row_n = self.ctrl_rows[row_name]
+        self.rotate_b = tk.Button(self.ctrl_frame, text=row_name,
+            width=self.button_width, command=self.on_rotate)
+        self.rotate_b.grid(row=row_n, column=0, sticky=tk.W+tk.E+tk.N,
+            **self.pad1.get("sw", "xx"))
+        self.rotate_e = vk.FloatEntry(self.ctrl_frame, 
+            width=self.entry_width)
+        self.rotate_e.set(0)
+        self.rotate_e.grid(row=row_n, column=1, columnspan=2,
+            sticky=tk.W+tk.E, **self.pad1.get("c"))
+        self.rotate_u_l = tk.Label(self.ctrl_frame, text="°")
+        self.rotate_u_l.grid(row=row_n, column=3, 
+            sticky=tk.W, **self.pad1.get("e"))
 
         # Initial status for all undo buttons is off
         self.update_undo_b()
@@ -682,6 +700,26 @@ class GUI(tk.Tk) :
         self.input_canvas.undo()
         self.update_undo_b()
         self.update_proc_mode()
+
+    def on_rotate(self) :
+        angle_deg = self.rotate_e.value
+        if angle_deg != 0 :
+            # Rotate 
+            self.input_canvas.rotate_image(angle_deg)
+            # Set all the other fuss
+            x = self.input_canvas.image_no_zoom_PIL.width
+            y = self.input_canvas.image_no_zoom_PIL.height
+            self.out_res_le.set_buffer("orig", (x, y))
+            self.out_res_le.set_buffer("ref", (x, y))
+            if (self.comp_mode_sv.get() == 
+                self.image_processor.GBC_comp_mode_name) :
+                self.out_res_le.set_buffer("GBC", (x, y))
+                self.tiles_grid_le.set_buffer("GBC", (
+                    int(np.floor(x/self.tile_size_e_x.value)), 
+                    int(np.floor(y/self.tile_size_e_y.value))))
+            self.update_all_res_entries(x, y)
+            self.update_undo_b()
+            self.update_proc_mode()
 
     def on_proc_mode(self, *args, **kwargs) :
         proc_mode = self.proc_mode_sv.get()

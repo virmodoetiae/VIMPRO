@@ -17,6 +17,7 @@
 ### IMPORTS ###################################################################
 
 import os
+import numpy as np
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageOps, ImageTk
@@ -141,14 +142,21 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.draw_image()
 
     # Set image from provided PIL image but do not draw
-    def set_image(self, im) :
+    def set_image(self, im, set_no_rot=False) :
         self.image_no_zoom_PIL = im
-        self.image_no_zoom_PIL_RGB = self.image_no_zoom_PIL.convert("RGB")
+        self.image_no_zoom_PIL_RGB = self.image_no_zoom_PIL.convert("RGBA")
         self.image_no_zoom = ImageTk.PhotoImage(self.image_no_zoom_PIL_RGB)
         self.image = self.image_no_zoom
         self.aspect_ratio = self.image.width()/self.image.height()
         self.configure(scrollregion=(0, 0, self.image.width(), 
             self.image.height()))
+        if set_no_rot :
+            self.image_no_zoom_no_rot_PIL = im.convert("RGBA")
+            y = im.height
+            x = im.width
+            self.r0 = np.sqrt((y/2)**2+(x/2)**2)
+            self.theta0 = np.arcsin(y/(2*self.r0))
+            self.theta = self.theta0
 
     # Load image from file but do not draw
     def load_image(self) :
@@ -162,7 +170,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
                     path += p+"/"
             self.filepath = path
             self.filename = (file.name.split("/")[-1]).split(".")[0]
-            self.set_image(Image.open(file.name))
+            self.set_image(Image.open(file.name), set_no_rot=True)
 
     def save_image(self, **kwargs) :
         if self.image_id :
@@ -199,8 +207,8 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.scan_dragto(self.last_event_x, self.last_event_y, gain=1)
 
     # Set passed image but zoom it to the level of the pre-existing image
-    def set_zoom_draw_image(self, im):
-        self.set_image(im)
+    def set_zoom_draw_image(self, im, **kwargs):
+        self.set_image(im, **kwargs)
         self.zoom_image(self.last_event_x, self.last_event_y)
         self.draw_image()
 
@@ -219,7 +227,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
         self.undo_buffer = self.image_no_zoom_PIL.copy()
         self.set_zoom_draw_image(
             self.image_no_zoom_PIL.resize((x,y),
-            resample=mode))
+            resample=mode), set_no_rot=True)
 
     # Crop image
     def crop_image(self, **kwargs) :
@@ -259,7 +267,56 @@ class MouseScrollableImageCanvas(tk.Canvas):
             box = kwargs["box"]
             box = (max(box[0], 0), max(box[1], 0), min(box[2], x0), 
                 min(box[3], y0))
+        print("Box", box)
         self.undo_buffer = self.image_no_zoom_PIL.copy()
+        self.set_zoom_draw_image(self.image_no_zoom_PIL.crop(box))
+
+    # Add transparent padding to image (i.e. expand the image canvas)
+    def expand_image_canvas(self, im, X, Y):
+        c = (0,0,0,1)
+        top = int(Y/2)
+        bottom = Y-top
+        left = int(X/2)
+        right = X-left
+        width, height = im.size
+        new_width = width + right + left
+        new_height = height + top + bottom
+        im2 = Image.new(im.mode, (new_width, new_height), c)
+        im2.paste(im, (left, top))
+        return im2
+
+    # Rotate image (CCW) by a specified angle in degrees
+    def rotate_image(self, angle_deg) :
+        angle_deg = -angle_deg
+        y = self.image_no_zoom_no_rot_PIL.height
+        x = self.image_no_zoom_no_rot_PIL.width
+        theta1 = self.theta+(angle_deg*2*np.pi/360)%(2*np.pi)
+        theta2 = theta1-2*self.theta0
+        self.theta = theta1
+        y1 = abs(int(np.sin(theta1)*2*self.r0))
+        y2 = abs(int(np.sin(theta2)*2*self.r0))
+        x1 = int(np.sqrt((2*self.r0)**2-(y1)**2))
+        x2 = int(np.sqrt((2*self.r0)**2-(y2)**2))
+        yf = max(y1, y2)
+        xf = max(x1, x2)
+
+        # Add padding before rotation (padding is transparent)
+        self.set_zoom_draw_image(self.expand_image_canvas(
+            self.image_no_zoom_no_rot_PIL, max(xf-x, 0), max(yf-y, 0)))
+
+        # Rotate within padded space
+        self.set_zoom_draw_image(self.image_no_zoom_PIL.convert("RGBA").rotate(
+            (self.theta-self.theta0)*360/2/np.pi))
+        
+        # This is not really needed if the padding is transparent (as it is 
+        # right now). Still, better not to have extra bits, even if transparent
+        x0 = self.image_no_zoom_PIL.width
+        y0 = self.image_no_zoom_PIL.height
+        x = min(xf, x0)
+        y = min(yf, y0)
+        dx_2 = int(int(x0-x)/2.0)
+        dy_2 = int(int(y0-y)/2.0) 
+        box = (dx_2, dy_2, x+dx_2, y+dy_2)
         self.set_zoom_draw_image(self.image_no_zoom_PIL.crop(box))
 
     # Undo (specifically meant for resize_image or crop_image)
@@ -367,6 +424,69 @@ class Padding :
                 pads["padx"] = (x/r, x/r)
                 pads["pady"] = (y, y)
         return pads
+
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------#
+
+# Class to handle an entry of a float
+class FloatEntry(tk.Entry) :
+
+    def __init__(self, *args, **kwargs) :
+        tk.Entry.__init__(self, *args, **kwargs)
+        self.sv = tk.StringVar()
+        self.config(textvariable=self.sv)
+        self.value = None
+        self.min_value = -1e69
+        self.max_value = 1e69
+        self.valid = False
+        self.sv.trace("w", self.on_write)
+
+    def on_write(self, *args) :
+        try :
+            self.value = max(min(float(self.sv.get()), self.max_value), 
+                self.min_value)
+            self.sv.set(self.value)
+            self.valid = True
+            self.config({"background": "White"})
+        except :
+            self.valid = False
+            self.config({"background": "Red"})
+
+    def disable(self) :
+        self.config(state=tk.DISABLED)
+
+    def enable(self) :
+        self.config(state=tk.NORMAL)
+
+    def set(self, value) :
+        self.sv.set(value)
+
+    def set_min_value(self, value) :
+        self.min_value = value
+        if self.value :
+            if self.value < self.min_value :
+                self.sv.set(value)
+        else :
+            self.sv.set(value)
+
+    def set_max_value(self, value) :
+        self.max_value = value
+        if self.value :
+            if self.value > self.max_value :
+                self.sv.set(value)
+        else :
+            self.sv.set(value)
+
+    def unset_min_value(self) :
+        self.min_value = -1e69
+
+    def unset_max_value(self) :
+        self.max_value = 1e69
+
+    # Method to overwrite trace_add if needed
+    def trace(self, *args) :
+        self.sv.trace(*args)
 
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
