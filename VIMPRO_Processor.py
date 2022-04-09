@@ -17,6 +17,7 @@
 ### IMPORTS ###################################################################
 
 import time
+from copy import deepcopy
 import numpy as np
 from PIL import Image, ImageOps, ImageTk
 from tkinter.filedialog import askopenfile, asksaveasfile
@@ -29,8 +30,22 @@ class KMeans :
 
     def __init__(self, **kwargs) :
 
-        self.data, self.data_freq = np.unique(kwargs["data"], axis=0, 
-            return_counts=True) 
+        # Remove transparency from the k-means clustering and add it back
+        # as a single color (0,0,0,0) to the means if any transparency was
+        # present to begin with
+        tmp = deepcopy(kwargs["data"])
+        alpha_threshold = 127
+        transparent = np.where(tmp[:,3] < alpha_threshold)
+        non_transparent = np.where(tmp[:,3] > alpha_threshold)
+        tmp[non_transparent, 3] = 255
+        tmp[transparent] = np.array([0,0,0,0])
+        tmp = np.delete(tmp, transparent, axis=0)
+        self.has_transparency = False
+        if transparent[0].shape[0] != 0 :
+            self.has_transparency = True
+
+        self.data, self.data_freq = np.unique(tmp, axis=0, 
+            return_counts=True)
         
         self.n = self.data.shape[0]
         self.d = self.data.shape[1]
@@ -84,6 +99,9 @@ class KMeans :
             i+=1
 
         self.force_means_size()
+
+        if self.has_transparency :
+            self.means = np.vstack([self.means, np.array([0,0,0,0])])
 
         if self.print_info :
             print("Final k-means performance (iters/res):", i,
