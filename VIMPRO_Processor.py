@@ -16,11 +16,18 @@
 
 ### IMPORTS ###################################################################
 
+import os
 import time
+import random
+import string
+import subprocess
+
+from sys import platform
 from copy import deepcopy
-import numpy as np
 from PIL import Image, ImageOps, ImageTk
 from tkinter.filedialog import askopenfile, asksaveasfile
+
+import numpy as np
 
 import VIMPRO_Data as vd
 
@@ -448,15 +455,12 @@ class ImageProcessor :
         rgbfix -C -v -p 0 main.gb <= the C option denots a GBC ROM instead of a
                                      GB ROM, it will not compile properly 
                                      without it!
-    Please note that the source written by this function in the current state
-    is rather cumbersome, as there is absolutely no compression of any sorts,
-    meaning that all the (20*18=) 360 tiles are written in spite of potential
-    (and generally there always are) duplicates. This will be improved in the
-    future
+    To skip the manual compilation step, if you are on a 64-bit Windows system,
+    you can use the 'Compile .gb file button'
     '''
-    def export_asm(self) :
+    def create_asm(self) :
         if not(self.output_is_GBC_compatible) :
-                return
+            return
 
         t_x = self.tile_size[0]
         t_y = self.tile_size[1]
@@ -724,10 +728,81 @@ class ImageProcessor :
         #
         self.asm_source += vd.fill_from_bank1_map_end_to_source_end()
 
+    def export_asm(self) :
+
+        if not(self.output_is_GBC_compatible) :
+            return
+        if self.asm_source == "" :
+            return
         file = asksaveasfile(mode='w', defaultextension=".asm",
             initialfile="main", filetypes=[("Assembly source file", ".asm")])
         if file :
             file.write(self.asm_source)
-        
+
         # Clear source after saving file
         self.asm_source = ""
+
+    def compile_gb(self) :
+        
+        # Currently only for Windows
+        if platform != "win32":
+            return
+
+        # Create asm source code
+        self.create_asm()
+
+        if not(self.output_is_GBC_compatible) :
+            return
+        if self.asm_source == "" :
+            return
+
+        # Create dummy file which will be overwritten
+        file = asksaveasfile(mode='w', defaultextension=".gb",
+            initialfile="main", filetypes=[("GBC file", ".gb")])
+        if not file :
+            self.asm_source = ""
+            return
+        
+        # Define names
+        filename_with_ext = file.name.split("/")[-1]
+        filename_without_ext = filename_with_ext.split(".")[0]
+        folder_path = str(file.name).replace(filename_with_ext, "")
+
+        # Name root for temporary files written to disk
+        tmp = ''.join(
+                random.choice(
+                    string.ascii_uppercase+string.digits+string.ascii_lowercase
+                    ) for _ in range(29))
+
+        # Write asm source
+        with open(tmp+".asm", "w") as o :
+            o.write(self.asm_source)
+
+        # Write dlls
+        with open("libpng16.dll", "wb") as o:
+            o.write(vd.libpng16_dll_x64)
+        with open("zlib1.dll", "wb") as o:
+            o.write(vd.zlib1_dll_x64)
+
+        # Write and run exes to actually write the compiled .gb to the initial
+        # dummy file
+        with open(tmp+".exe", "wb") as o:
+            o.write(vd.rgbasm_exe_x64)
+        subprocess.call([tmp+".exe", "-o", tmp+".o", tmp+".asm"])
+        with open(tmp+".exe", "wb") as o:
+            o.write(vd.rgblink_exe_x64)
+        subprocess.call([tmp+".exe", "-o", file.name, tmp+".o"])
+        with open(tmp+".exe", "wb") as o:
+            o.write(vd.rgbfix_exe_x64)
+        subprocess.call([tmp+".exe", "-C", "-v", "-p", "0", file.name])
+
+        # Remove all leftovers
+        os.remove(tmp+".asm")
+        os.remove(tmp+".o")
+        os.remove(tmp+".exe")
+        os.remove("libpng16.dll")
+        os.remove("zlib1.dll")
+
+        # Reset source
+        self.asm_source = ""
+        

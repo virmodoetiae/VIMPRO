@@ -17,7 +17,7 @@
 ### IMPORTS ###################################################################
 
 import os
-import sys
+from sys import platform
 import logging
 import numpy as np
 
@@ -123,8 +123,8 @@ class GUI(tk.Tk) :
         "Palettes search grid size", "Palette size", 
         "Bits per channel (R,G,B)", "Fidelity", "Tile size", "Tiles grid size",
         "Output resolution", "Process image", "Save & export options", 
-        "Pixel size", "Final resolution", "Save image", "Export .asm source"
-        ]
+        "Pixel size", "Final resolution", "Save image", "Export .asm source",
+        "Compile .gb file"]
         self.ctrl_rows = {}
         for i, name in enumerate(row_names) :
             self.ctrl_rows[name] = i
@@ -479,7 +479,7 @@ class GUI(tk.Tk) :
         self.save_image_b = tk.Button(self.ctrl_frame, width=self.button_width,
             text=row_name, command=self.on_save_image)
         self.save_image_b.grid(row=row_n, column=0, sticky=tk.W+tk.E,
-            **self.pad1.get("sw", "xx"))
+            **self.pad1.get("w", "xx"))
 
         # Export .asm code -----------#
         row_name = "Export .asm source"
@@ -487,7 +487,18 @@ class GUI(tk.Tk) :
         self.export_asm_b = tk.Button(self.ctrl_frame, width=self.button_width,
             text=row_name, command=self.on_export_asm)
         self.export_asm_b.grid(row=row_n, column=0, sticky=tk.W+tk.E,
+            **self.pad1.get("w", "xx"))
+
+        # "Compile .gb file" ---------#
+        row_name = "Compile .gb file"
+        row_n = self.ctrl_rows[row_name] 
+        self.compile_gb_b = tk.Button(self.ctrl_frame, width=self.button_width,
+            text=row_name, command=self.on_compile_gb)
+        self.compile_gb_b.grid(row=row_n, column=0, sticky=tk.W+tk.E,
             **self.pad1.get("sw", "xx"))
+        # Currently only available on Windows
+        if platform != "win32" :
+            self.compile_gb_b.config(state=tk.DISABLED)
 
         # Add functionality at the end to avoid potential issues regarding
         # referencing missing variables
@@ -910,7 +921,11 @@ class GUI(tk.Tk) :
             appendstr="_VIMPRO_")
 
     def on_export_asm(self) :
+        self.image_processor.create_asm()
         self.image_processor.export_asm()
+
+    def on_compile_gb(self) :
+        self.image_processor.compile_gb()
 
     def on_main_window_resize(self, *args) :
         pass

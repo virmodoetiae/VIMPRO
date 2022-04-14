@@ -267,7 +267,6 @@ class MouseScrollableImageCanvas(tk.Canvas):
             box = kwargs["box"]
             box = (max(box[0], 0), max(box[1], 0), min(box[2], x0), 
                 min(box[3], y0))
-        print("Box", box)
         self.undo_buffer = self.image_no_zoom_PIL.copy()
         self.set_zoom_draw_image(self.image_no_zoom_PIL.crop(box))
 
