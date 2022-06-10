@@ -268,7 +268,7 @@ class MouseScrollableImageCanvas(tk.Canvas):
             box = (max(box[0], 0), max(box[1], 0), min(box[2], x0), 
                 min(box[3], y0))
         self.undo_buffer = self.image_no_zoom_PIL.copy()
-        self.set_zoom_draw_image(self.image_no_zoom_PIL.crop(box))
+        self.set_zoom_draw_image(self.image_no_zoom_PIL.crop(box), set_no_rot=True)
 
     # Add transparent padding to image (i.e. expand the image canvas)
     def expand_image_canvas(self, im, X, Y):

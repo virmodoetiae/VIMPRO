@@ -115,15 +115,14 @@ class KMeans :
                 '{:.3E}'.format(rel_epsilon))
 
     def run_one_iteration(self) :
+
         # This bit of code produces an array dists of shape
         # (data.shape[0], means.shape[1]). Each row contains the
         # distances of the corresponding data point to each point
         # in means. So dists[i][j] is the average distance of data[i]
         # form means[j]
-        dists = np.zeros((self.n, 0))
-        for i, mean in enumerate(self.means) :
-            dists = np.insert(
-                dists, i, np.linalg.norm((mean-self.data), axis=1), axis=1)
+        dists = np.sum(np.square(self.data[:,None,:]-self.means[None,:,:]), 
+            axis=2)
 
         # Assign points in data to the closest cluster corresponding to 
         # each mean
@@ -239,10 +238,14 @@ class ImageProcessor :
         # Returns a 1-D array of size data.shape[0] wherein each element 
         # consists of the index of the corresponding palette color that best
         # approximates the corresponding element in data
+        dists = np.sum(np.square(data[:,None,:]-palette[None,:,:]), 
+            axis=2)
+        ''' This commented bit is the slower version of the part above
         dists = np.zeros((data.shape[0], 0))
         for i, palette_color in enumerate(palette) :
             d = np.linalg.norm((palette_color-data), axis=1)
             dists = np.insert(dists, i, d, axis=1)
+        '''
         return np.argmin(dists, axis=1)
 
     def replace_from_palette(self, data, palette) :
