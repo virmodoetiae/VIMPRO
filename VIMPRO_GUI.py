@@ -597,7 +597,7 @@ class GUI(tk.Tk) :
             return
         x = self.resize_res_le.x_e.value
         y = self.resize_res_le.y_e.value
-        if (x != self.input_canvas.image_no_zoom_PIL.width and
+        if (x != self.input_canvas.image_no_zoom_PIL.width or
             y != self.input_canvas.image_no_zoom_PIL.height) :
             self.input_canvas.resize_image(x, y, 
                 interpolation_modes[self.interp_mode_sv.get()])
