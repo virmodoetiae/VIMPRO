@@ -60,6 +60,7 @@ class GUI_GF(tk.Toplevel) :
 
         row_names = ["Palette size range", 
         "R channel bit range", "G channel bit range", "B channel bit range",
+        "Outline",
         "Step", "Set output folder", "Number of runs", "Run"]
         self.rows = {}
         for i, name in enumerate(row_names) :
@@ -173,6 +174,20 @@ class GUI_GF(tk.Toplevel) :
         self.b_channel_br_min_e.set_max_value_e(self.b_channel_br_max_e)
         self.b_channel_br_max_e.set_min_value_e(self.b_channel_br_min_e)
 
+        # Outline --------------------#
+        row_name = "Outline"
+        row_n = self.rows[row_name]
+        self.outline = False
+        self.outline_l = tk.Label(self.frame, text=row_name, 
+            anchor=tk.W)
+        self.outline_l.grid(row=row_n, column=0, sticky=tk.W, 
+            **self.pad1.get("w"))
+        self.outline_iv = tk.IntVar()
+        self.outline_cb = tk.Checkbutton(self.frame, variable=self.outline_iv, 
+            onvalue=1, offvalue=0, command=self.on_outline_check)
+        self.outline_cb.grid(row=row_n, column=1, sticky=tk.W, 
+            **self.pad1.get("w"))
+
         # Output folder --------------#
         row_name = "Set output folder"
         row_n = self.rows[row_name]
@@ -208,6 +223,10 @@ class GUI_GF(tk.Toplevel) :
         if f != None and f != '':
             self.output_folder = f
             self.run_b.config(state=tk.NORMAL)
+
+    def on_outline_check(self) :
+        self.outline = bool(self.outline_iv.get())
+        print(self.outline)
 
     def on_step(self) :
         self.on_run(step=True)
@@ -252,6 +271,7 @@ class GUI_GF(tk.Toplevel) :
                 self.g_channel_br_max_e.value)
             bb = randomize(self.b_channel_br_min_e.value, 
                 self.b_channel_br_max_e.value)
+            print(rb, gb, bb)
             # Run
             self.root.image_processor.process(
                 palettesgridsize=(None, None), 
@@ -260,6 +280,10 @@ class GUI_GF(tk.Toplevel) :
                 fidelity=fidelity, 
                 tilesize=(None, None), 
                 outsize=out_size)
+            if (self.outline) :
+                self.root.image_processor.apply_shader_outline(
+                    alphathreshold=127)
+
             # Save
             if (not step) :
                 if not self.root.pixel_size_e.valid :

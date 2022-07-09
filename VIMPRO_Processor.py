@@ -459,7 +459,7 @@ class ImageProcessor :
     def apply_shader_outline(self, **kwargs) :
         output = self.output_canvas.image_no_zoom_PIL_RGB
         self.output_canvas.set_zoom_draw_image(
-            vs.OutlineShader(output, kwargs).apply())
+            vs.OutlineShader(output, **kwargs).apply())
 
     #-------------------------------------------------------------------------#
     # GBC-related from below here
