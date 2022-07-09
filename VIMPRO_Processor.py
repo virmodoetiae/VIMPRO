@@ -30,6 +30,7 @@ from tkinter.filedialog import askopenfile, asksaveasfile
 import numpy as np
 
 import VIMPRO_Data as vd
+import VIMPRO_Shaders as vs
 
 ### CONSTANTS #################################################################
 
@@ -451,6 +452,18 @@ class ImageProcessor :
         self.output_canvas.filename = self.input_canvas.filename
         self.output_canvas.filepath = self.input_canvas.filepath
 
+    # Applies an outline to an image, with the outline lying between non-
+    # transparent and transparent pixels, with the trheshold for transparency
+    # being alpha_threshold. Further parameters are the outline width and the
+    # outline colors. 
+    def apply_shader_outline(self, **kwargs) :
+        output = self.output_canvas.image_no_zoom_PIL_RGB
+        self.output_canvas.set_zoom_draw_image(
+            vs.OutlineShader(output, kwargs).apply())
+
+    #-------------------------------------------------------------------------#
+    # GBC-related from below here
+
     '''
     This function converts the output_image and converts it to a Game Boy 
     Color format. By that, I mean that the script produces a complete Game Boy
@@ -466,6 +479,7 @@ class ImageProcessor :
     To skip the manual compilation step, if you are on a 64-bit Windows system,
     you can use the 'Compile .gb file button'
     '''
+
     def create_asm(self) :
         if not(self.output_is_GBC_compatible) :
             return
