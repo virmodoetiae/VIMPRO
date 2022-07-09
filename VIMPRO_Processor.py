@@ -31,6 +31,11 @@ import numpy as np
 
 import VIMPRO_Data as vd
 
+### CONSTANTS #################################################################
+
+DEFAULT_PROC_MODE = "Default"
+TILED_PROC_MODE = "Tiled"
+
 ### CLASSES ###################################################################
 
 class KMeans :
@@ -41,7 +46,7 @@ class KMeans :
         # as a single color (0,0,0,0) to the means if any transparency was
         # present to begin with
         tmp = deepcopy(kwargs["data"])
-        alpha_threshold = 127
+        alpha_threshold = 191 #127
         transparent = np.where(tmp[:,3] < alpha_threshold)
         non_transparent = np.where(tmp[:,3] > alpha_threshold)
         tmp[non_transparent, 3] = 255
@@ -165,8 +170,8 @@ class ImageProcessor :
         self.input_canvas = input_canvas
         self.output_canvas = output_canvas
         self.max_pixels = 128*128
-        self.default_proc_mode_name = "Default"
-        self.tiled_proc_mode_name = "Tiled"
+        self.default_proc_mode_name = DEFAULT_PROC_MODE
+        self.tiled_proc_mode_name = TILED_PROC_MODE
         self.proc_modes = [self.default_proc_mode_name, 
             self.tiled_proc_mode_name]
         self.default_comp_mode_name = "Default"
@@ -206,7 +211,7 @@ class ImageProcessor :
         return palettes[0]
 
     def convert_color_bits(self, array, rgb_bits, unique=False) :
-        if rgb_bits == [16, 16, 16] :
+        if rgb_bits == [8, 8, 8] :
             return array
         bit_scale = np.array([
             float((2**(rgb_bits[0])-1))/255.0, 

@@ -31,6 +31,8 @@ import VIMPRO_Data as vd
 
 from tkinter.filedialog import askdirectory
 
+import time
+
 ### FUNCTIONS #################################################################
 
 ### CLASSES ###################################################################
@@ -56,9 +58,9 @@ class GUI_GF(tk.Toplevel) :
         self.frame.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S,
             **self.pad0.get("c"))
 
-        row_names = ["Number of runs", "Palette size range", 
+        row_names = ["Palette size range", 
         "R channel bit range", "G channel bit range", "B channel bit range",
-        "Set output folder", "Run"]
+        "Step", "Set output folder", "Number of runs", "Run"]
         self.rows = {}
         for i, name in enumerate(row_names) :
             self.rows[name] = i
@@ -70,10 +72,10 @@ class GUI_GF(tk.Toplevel) :
             anchor=tk.W)
         self.n_runs_l.grid(row=row_n, column=0, sticky=tk.W, 
             **self.pad1.get("w"))
-        self.n_runs = vk.IntEntry(self.frame, 
+        self.n_runs_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.n_runs.set(10)
-        self.n_runs.grid(row=row_n, column=1, columnspan=2,
+        self.n_runs_e.set(10)
+        self.n_runs_e.grid(row=row_n, column=1, columnspan=2,
             sticky=tk.W+tk.E, **self.pad1.get("c"))
 
         # Palettes size range --------#
@@ -83,16 +85,21 @@ class GUI_GF(tk.Toplevel) :
             anchor=tk.W)
         self.palettes_sr_l.grid(row=row_n, column=0, sticky=tk.W, 
             **self.pad1.get("w"))
-        self.palettes_sr_min = vk.IntEntry(self.frame, 
+        self.palettes_sr_min_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.palettes_sr_min.set(3)
-        self.palettes_sr_min.grid(row=row_n, column=1, 
+        self.palettes_sr_min_e.set(3)
+        self.palettes_sr_min_e.set_min_value(1)
+        self.palettes_sr_min_e.set_max_value(32)
+        self.palettes_sr_min_e.grid(row=row_n, column=1, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
-        self.palettes_sr_max = vk.IntEntry(self.frame, 
+        self.palettes_sr_max_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.palettes_sr_max.set(6)
-        self.palettes_sr_max.grid(row=row_n, column=2, 
+        self.palettes_sr_max_e.set(6)
+        self.palettes_sr_max_e.set_max_value(32)
+        self.palettes_sr_max_e.grid(row=row_n, column=2, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
+        self.palettes_sr_min_e.set_max_value_e(self.palettes_sr_max_e)
+        self.palettes_sr_max_e.set_min_value_e(self.palettes_sr_min_e)
 
         # R channel bit range --------#
         row_name = "R channel bit range"
@@ -101,16 +108,22 @@ class GUI_GF(tk.Toplevel) :
             anchor=tk.W)
         self.r_channel_br_l.grid(row=row_n, column=0, sticky=tk.W, 
             **self.pad1.get("w"))
-        self.r_channel_br_min = vk.IntEntry(self.frame, 
+        self.r_channel_br_min_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.r_channel_br_min.set(2)
-        self.r_channel_br_min.grid(row=row_n, column=1, 
+        self.r_channel_br_min_e.set(2)
+        self.r_channel_br_min_e.set_min_value(1)
+        self.r_channel_br_min_e.set_max_value(8)
+        self.r_channel_br_min_e.grid(row=row_n, column=1, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
-        self.r_channel_br_max = vk.IntEntry(self.frame, 
+        self.r_channel_br_max_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.r_channel_br_max.set(8)
-        self.r_channel_br_max.grid(row=row_n, column=2, 
+        self.r_channel_br_max_e.set(8)
+        self.r_channel_br_max_e.set_min_value(1)
+        self.r_channel_br_max_e.set_max_value(8)
+        self.r_channel_br_max_e.grid(row=row_n, column=2, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
+        self.r_channel_br_min_e.set_max_value_e(self.r_channel_br_max_e)
+        self.r_channel_br_max_e.set_min_value_e(self.r_channel_br_min_e)
 
         # G channel bit range --------#
         row_name = "G channel bit range"
@@ -119,16 +132,22 @@ class GUI_GF(tk.Toplevel) :
             anchor=tk.W)
         self.g_channel_br_l.grid(row=row_n, column=0, sticky=tk.W, 
             **self.pad1.get("w"))
-        self.g_channel_br_min = vk.IntEntry(self.frame, 
+        self.g_channel_br_min_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.g_channel_br_min.set(2)
-        self.g_channel_br_min.grid(row=row_n, column=1, 
+        self.g_channel_br_min_e.set(2)
+        self.g_channel_br_min_e.set_min_value(1)
+        self.g_channel_br_min_e.set_max_value(8)
+        self.g_channel_br_min_e.grid(row=row_n, column=1, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
-        self.g_channel_br_max = vk.IntEntry(self.frame, 
+        self.g_channel_br_max_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.g_channel_br_max.set(8)
-        self.g_channel_br_max.grid(row=row_n, column=2, 
+        self.g_channel_br_max_e.set(8)
+        self.g_channel_br_max_e.set_min_value(1)
+        self.g_channel_br_max_e.set_max_value(8)
+        self.g_channel_br_max_e.grid(row=row_n, column=2, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
+        self.g_channel_br_min_e.set_max_value_e(self.g_channel_br_max_e)
+        self.g_channel_br_max_e.set_min_value_e(self.g_channel_br_min_e)
 
         # B channel bit range --------#
         row_name = "B channel bit range"
@@ -137,16 +156,22 @@ class GUI_GF(tk.Toplevel) :
             anchor=tk.W)
         self.b_channel_br_l.grid(row=row_n, column=0, sticky=tk.W, 
             **self.pad1.get("w"))
-        self.b_channel_br_min = vk.IntEntry(self.frame, 
+        self.b_channel_br_min_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.b_channel_br_min.set(2)
-        self.b_channel_br_min.grid(row=row_n, column=1, 
+        self.b_channel_br_min_e.set(2)
+        self.b_channel_br_min_e.set_min_value(1)
+        self.b_channel_br_min_e.set_max_value(8)
+        self.b_channel_br_min_e.grid(row=row_n, column=1, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
-        self.b_channel_br_max = vk.IntEntry(self.frame, 
+        self.b_channel_br_max_e = vk.IntEntry(self.frame, 
             width=self.entry_width)
-        self.b_channel_br_max.set(8)
-        self.b_channel_br_max.grid(row=row_n, column=2, 
+        self.b_channel_br_max_e.set(8)
+        self.b_channel_br_max_e.set_min_value(1)
+        self.b_channel_br_max_e.set_max_value(8)
+        self.b_channel_br_max_e.grid(row=row_n, column=2, 
             sticky=tk.W+tk.E, **self.pad1.get("c"))
+        self.b_channel_br_min_e.set_max_value_e(self.b_channel_br_max_e)
+        self.b_channel_br_max_e.set_min_value_e(self.b_channel_br_min_e)
 
         # Output folder --------------#
         row_name = "Set output folder"
@@ -156,6 +181,14 @@ class GUI_GF(tk.Toplevel) :
         self.output_folder_b.grid(row=row_n, column=0, columnspan=3,
             sticky=tk.W+tk.E+tk.N, **self.pad1.get("w"))
         self.output_folder = None
+
+        # Step -----------------------#
+        row_name = "Step"
+        row_n = self.rows[row_name]
+        self.step_b = tk.Button(self.frame, text=row_name,
+            command=self.on_step)
+        self.step_b.grid(row=row_n, column=0, columnspan=3,
+            sticky=tk.W+tk.E+tk.N, **self.pad1.get("w"))
 
         # Run ------------------------#
         row_name = "Run"
@@ -176,8 +209,66 @@ class GUI_GF(tk.Toplevel) :
             self.output_folder = f
             self.run_b.config(state=tk.NORMAL)
 
-    def on_run(self) :
-        pass
+    def on_step(self) :
+        self.on_run(step=True)
+
+    def on_run(self, step=False) :
+
+        def randomize(m, M) :
+            if m == M :
+                return m
+            return np.random.randint(m, M)
+
+        if  (not self.n_runs_e.valid and step) or \
+            (not self.palettes_sr_min_e.valid) or \
+            (not self.palettes_sr_max_e.valid) or \
+            (not self.r_channel_br_min_e.valid) or \
+            (not self.r_channel_br_max_e.valid) or \
+            (not self.g_channel_br_min_e.valid) or \
+            (not self.g_channel_br_max_e.valid) or \
+            (not self.b_channel_br_min_e.valid) or \
+            (not self.b_channel_br_max_e.valid) :
+            print("Parameters not set correctly")
+            return
+
+        if (not step and not self.root.pixel_size_e.valid) :
+            print("Pixel size not set correctly")
+            return
+       
+        nr = 1
+        if (not step) :
+            nr = self.n_runs_e.value
+        for i in range(nr) : 
+            # Values from master
+            fidelity = self.root.fidelity_e.get()
+            out_size = (self.root.out_res_le.x_e.value, 
+                self.root.out_res_le.y_e.value)
+            # Values from here
+            ps = randomize(self.palettes_sr_min_e.value,
+                self.palettes_sr_max_e.value)
+            rb = randomize(self.r_channel_br_min_e.value, 
+                self.r_channel_br_max_e.value)
+            gb = randomize(self.g_channel_br_min_e.value, 
+                self.g_channel_br_max_e.value)
+            bb = randomize(self.b_channel_br_min_e.value, 
+                self.b_channel_br_max_e.value)
+            # Run
+            self.root.image_processor.process(
+                palettesgridsize=(None, None), 
+                palettesize=ps, 
+                rgbbits=(rb,gb,bb), 
+                fidelity=fidelity, 
+                tilesize=(None, None), 
+                outsize=out_size)
+            # Save
+            if (not step) :
+                if not self.root.pixel_size_e.valid :
+                    return
+                self.root.output_canvas.dialogless_save_image(
+                    pixelsize = self.root.pixel_size_e.value,
+                    outfolder = self.output_folder,
+                    appendstr = f"_{i}"
+                )
 
     def on_close(self) :
         self.root.on_open_gf_view()

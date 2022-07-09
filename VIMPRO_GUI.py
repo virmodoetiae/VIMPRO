@@ -334,23 +334,23 @@ class GUI(tk.Tk) :
             **self.pad1.get("w"))
 
         self.bits_R_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
-        self.bits_R_e.set(16)
+        self.bits_R_e.set(8)
         self.bits_R_e.set_min_value(1)
-        self.bits_R_e.set_max_value(16)
+        self.bits_R_e.set_max_value(8)
         self.bits_R_e.grid(row=row_n, column=1, sticky=tk.W+tk.E,
             **self.pad1.get("c"))
         
         self.bits_G_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
-        self.bits_G_e.set(16)
+        self.bits_G_e.set(8)
         self.bits_G_e.set_min_value(1)
-        self.bits_G_e.set_max_value(16)
+        self.bits_G_e.set_max_value(8)
         self.bits_G_e.grid(row=row_n, column=2, sticky=tk.W+tk.E,
             **self.pad1.get("c"))
         
         self.bits_B_e = vk.IntEntry(self.ctrl_frame, width=self.entry_width)
-        self.bits_B_e.set(16)
+        self.bits_B_e.set(8)
         self.bits_B_e.set_min_value(1)
-        self.bits_B_e.set_max_value(16)
+        self.bits_B_e.set_max_value(8)
         self.bits_B_e.grid(row=row_n, column=3, sticky=tk.W+tk.E,
             **self.pad1.get("e"))
 
@@ -766,6 +766,7 @@ class GUI(tk.Tk) :
                 self.out_res_le.disable()
             else : 
                 self.out_res_le.enable()
+            self.open_gf_view_b.configure(state=tk.NORMAL)
         
         elif proc_mode == self.image_processor.tiled_proc_mode_name :
             row_name = "Palettes search grid size"
@@ -809,6 +810,10 @@ class GUI(tk.Tk) :
             if comp_mode == self.image_processor.GBC_comp_mode_name :
                 self.out_res_le.set((160, 144))
                 self.out_res_le.disable()
+            
+            self.open_gf_view_b.configure(state=tk.DISABLED)
+            if self.open_gf_view_b.toggled :
+                self.on_open_gf_view()
 
     def on_comp_mode(self, *args, **kwargs) :
         comp_mode = self.comp_mode_sv.get()
@@ -858,6 +863,10 @@ class GUI(tk.Tk) :
             self.out_res_le.set((160, 144))
             self.out_res_le.disable()
 
+            self.open_gf_view_b.configure(state=tk.DISABLED)
+            if self.open_gf_view_b.toggled :
+                self.on_open_gf_view()
+
         elif (comp_mode == self.image_processor.default_comp_mode_name) :
             self.palette_size_e.unset_max_value()
             self.bits_R_e.unset_max_value()
@@ -874,6 +883,8 @@ class GUI(tk.Tk) :
                 self.tiles_grid_le.set_buffer("ref")
             self.out_res_le.reset_from_buffer("GBC")
             self.out_res_le.set_buffer("ref")
+
+            self.open_gf_view_b.configure(state=tk.NORMAL)
 
     def on_write_tile_size_x(self, *args) :
         self.tile_size_e_x.on_write()

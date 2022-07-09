@@ -217,6 +217,20 @@ class MouseScrollableImageCanvas(tk.Canvas):
                 resample=Image.NEAREST) 
             output_image.save(file.name)
 
+    def dialogless_save_image(self, **kwargs) :
+        if self.image_id :
+            pixel_size = kwargs["pixelsize"]
+            output_folder = kwargs["outfolder"]
+            append_str = kwargs["appendstr"]
+            output_path = os.path.join(output_folder, self.filename)+ \
+                append_str+".png"
+            output_image = self.image_no_zoom_PIL.copy()
+            final_size = (int(output_image.width*pixel_size), 
+                int(output_image.height*pixel_size))
+            output_image = output_image.resize(final_size, 
+                resample=Image.NEAREST) 
+            output_image.save(output_path)
+
     # (Re-)Draw image on canvas
     def draw_image(self):
         if not self.image_id :
@@ -524,11 +538,20 @@ class IntEntry(tk.Entry) :
         self.max_value = 1e69
         self.valid = False
         self.sv.trace("w", self.on_write)
+        self.max_value_e = [None]
+        self.min_value_e = [None]
 
     def on_write(self, *args) :
         try :
-            self.value = max(min(int(self.sv.get()), self.max_value), 
-                self.min_value)
+            M = self.max_value
+            m = self.min_value
+            if self.max_value_e[0] != None :
+                if self.max_value_e[0].valid :
+                    M = min(self.max_value_e[0].value, M)
+            if self.min_value_e[0] != None :
+                if self.min_value_e[0].valid :
+                    m = max(self.min_value_e[0].value, m)
+            self.value = max(min(int(self.sv.get()), M), m)
             self.sv.set(self.value)
             self.valid = True
             self.config({"background": "White"})
@@ -553,6 +576,10 @@ class IntEntry(tk.Entry) :
         else :
             self.sv.set(value)
 
+    def set_min_value_e(self, e) :
+        self.min_value_e[0] = e
+        self.sv.set(self.value)
+
     def set_max_value(self, value) :
         self.max_value = value
         if self.value :
@@ -560,6 +587,10 @@ class IntEntry(tk.Entry) :
                 self.sv.set(value)
         else :
             self.sv.set(value)
+
+    def set_max_value_e(self, e) :
+        self.max_value_e[0] = e
+        self.sv.set(self.value)
 
     def unset_min_value(self) :
         self.min_value = 0
