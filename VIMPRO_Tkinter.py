@@ -27,6 +27,26 @@ import VIMPRO_Data as vd
 
 ### FUNCTIONS #################################################################
 
+### FUNCTIONS #################################################################
+
+# Make grid stretchable
+def stretch_grid(obj, **kwargs) :
+    except_rows = kwargs.get("exceptrows", [])
+    except_columns = kwargs.get("exceptcolumns", [])
+    min_row_size = kwargs.get("minrowsize", 0)
+    min_column_size = kwargs.get("mincolumnsize", 0)
+    col_count, row_count = obj.grid_size()
+    for col in range(col_count):
+        w = 1
+        if col in except_columns :
+            w = 0
+        obj.grid_columnconfigure(col, weight=w, minsize=min_column_size)
+    for row in range(row_count):
+        w = 1
+        if row in except_rows :
+            w = 0
+        obj.grid_rowconfigure(row, weight=w, minsize=min_row_size)
+
 # Add to dict under dict_key from kwargs[kwargs_key], if it exists
 def add_from_kwargs(dict, dict_key, kwargs_key, kwargs) :
     if kwargs_key in kwargs :

@@ -28,6 +28,7 @@ from PIL import Image, ImageOps, ImageTk
 import VIMPRO_Processor as vp
 import VIMPRO_Tkinter as vk
 import VIMPRO_Data as vd
+from VIMPRO_GUI_GF import GUI_GF
 
 ### DICTIONARIES ##############################################################
 
@@ -37,26 +38,6 @@ interpolation_modes = {"Bilinear" : Image.BILINEAR, "Bicubic" : Image.BICUBIC,
 anchor_points = {"Center" : "c", "Top" : "n", "Top-right" : "ne", "Right" : "e", 
     "Bottom-right" : "se", "Bottom" : "s", "Bottom-left" : "sw",
     "Left" : "w", "Top-left" : "nw"}
-
-### FUNCTIONS #################################################################
-
-# Make grid stretchable
-def stretch_grid(obj, **kwargs) :
-        except_rows = kwargs.get("exceptrows", [])
-        except_columns = kwargs.get("exceptcolumns", [])
-        min_row_size = kwargs.get("minrowsize", 0)
-        min_column_size = kwargs.get("mincolumnsize", 0)
-        col_count, row_count = obj.grid_size()
-        for col in range(col_count):
-            w = 1
-            if col in except_columns :
-                w = 0
-            obj.grid_columnconfigure(col, weight=w, minsize=min_column_size)
-        for row in range(row_count):
-            w = 1
-            if row in except_rows :
-                w = 0
-            obj.grid_rowconfigure(row, weight=w, minsize=min_row_size)
 
 ### Classes ###################################################################
 
@@ -92,7 +73,7 @@ class GUI(tk.Tk) :
             **self.pad0.get("nw"))
         self.frames.append(self.input_frame)
         self.input_canvas = vk.MouseScrollableImageCanvas(self.input_frame, 
-            width=600, height=300)
+            width=600, height=325)
         self.input_canvas.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
 
         #---------------------------------------------------------------------#
@@ -102,7 +83,7 @@ class GUI(tk.Tk) :
             **self.pad0.get("sw"))
         self.frames.append(self.output_frame)
         self.output_canvas = vk.MouseScrollableImageCanvas(self.output_frame, 
-            width=600, height=300)
+            width=600, height=325)
         self.output_canvas.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
 
         # Image processor object
@@ -124,7 +105,7 @@ class GUI(tk.Tk) :
         "Bits per channel (R,G,B)", "Fidelity", "Tile size", "Tiles grid size",
         "Output resolution", "Process image", "Save & export options", 
         "Pixel size", "Final resolution", "Save image", "Export .asm source",
-        "Compile .gb file"]
+        "Compile .gb file", "Generative features options", "Open view"]
         self.ctrl_rows = {}
         for i, name in enumerate(row_names) :
             self.ctrl_rows[name] = i
@@ -500,6 +481,24 @@ class GUI(tk.Tk) :
         if platform != "win32" :
             self.compile_gb_b.config(state=tk.DISABLED)
 
+        # Generative features options ----------------------------------------#
+        row_name = "Generative features options"
+        row_n = self.ctrl_rows[row_name]
+        ttk.Separator(self.ctrl_frame, orient=tk.HORIZONTAL).grid(row=row_n, 
+            column=0, columnspan=n_cols, sticky=tk.W+tk.E, 
+            **self.pad1.get("c", "xy", True))
+        tk.Label(self.ctrl_frame, text=row_name).grid(row=row_n, column=0, 
+            padx=self.label_width, sticky=tk.W)
+
+        # Open generative features view ----------------#
+        row_name = "Open view"
+        row_n = self.ctrl_rows[row_name]
+        self.open_gf_view_b = vk.ToggleButton(self.ctrl_frame, text=row_name,
+            width=self.button_width, command=self.on_open_gf_view)
+        self.open_gf_view_b.grid(row=row_n, column=0, sticky=tk.W+tk.E+tk.N,
+            **self.pad1.get("sw", "xx"))
+        self.gf_view = None
+
         # Add functionality at the end to avoid potential issues regarding
         # referencing missing variables
         self.tile_size_e_x.trace("w", self.on_write_tile_size_x)
@@ -528,9 +527,9 @@ class GUI(tk.Tk) :
         self.update_proc_mode() # Init out_res_le buffers
 
         # Formatting 
-        stretch_grid(self)
+        vk.stretch_grid(self)
         for frame in self.frames :
-            stretch_grid(frame, minrowsize=25, mincolumnsize=25)
+            vk.stretch_grid(frame, minrowsize=25, mincolumnsize=25)
 
     #-Start of class methods -------------------------------------------------#
 
@@ -926,6 +925,18 @@ class GUI(tk.Tk) :
 
     def on_compile_gb(self) :
         self.image_processor.compile_gb()
+
+    def on_open_gf_view(self) :
+        self.open_gf_view_b.on_toggle_change()
+        if self.open_gf_view_b.toggled :
+            if self.gf_view == None :
+                self.gf_view = GUI_GF(self)
+            else :
+                self.gf_view.update()
+                self.gf_view.deiconify()
+        else :
+            self.gf_view.withdraw()
+            pass
 
     def on_main_window_resize(self, *args) :
         pass
