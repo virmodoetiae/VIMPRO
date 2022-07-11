@@ -32,6 +32,8 @@ import numpy as np
 import VIMPRO_Data as vd
 import VIMPRO_Shaders as vs
 
+import colorsys as cs
+
 ### CONSTANTS #################################################################
 
 DEFAULT_PROC_MODE = "Default"
@@ -309,15 +311,16 @@ class ImageProcessor :
         output_image = Image.fromarray(data)
         self.output_canvas.set_zoom_draw_image(output_image)
 
+        # Save palette
+        self.palettes = np.array([k_means.means])
+
         # Set self.GBC_palette_map if in GBC_comp_mode
         if self.comp_mode == self.GBC_comp_mode_name :
             self.GBC_palette_map = [
                 [k_means.means for i in range(20)] for i in range(18)]
-            self.palettes = np.array([k_means.means])
             self.tile_size = (8, 8) # Useless, I keep it for consistency
         else :
             self.GBC_palette_map = None
-            self.palettes = None
             self.tile_size = None
 
     def process_tiled(self, **kwargs) :
@@ -375,16 +378,15 @@ class ImageProcessor :
                     rgb_bits)
                 palettes.append(k_means.means)
         palettes = np.asarray(palettes)
+        self.palettes = palettes.copy()
         #print("Dt k-means =", (time.perf_counter()-start_time))
 
         if self.comp_mode == self.GBC_comp_mode_name :
             self.GBC_palette_map = [
                 [None for i in range(out_t_x)] for i in range(out_t_y)]
-            self.palettes = palettes.copy()
             self.tile_size = (t_x, t_y)
         else :
             self.GBC_palette_map = None
-            self.palettes = None
             self.tile_size = None
 
         # Determine best palette for each tile. This is done or downsampled
@@ -460,6 +462,18 @@ class ImageProcessor :
         output = self.output_canvas.image_no_zoom_PIL_RGB
         self.output_canvas.set_zoom_draw_image(
             vs.OutlineShader(output, **kwargs).apply())
+
+    def set_background_color(self, color, alphathreshold=127) :
+        output = self.output_canvas.image_no_zoom_PIL_RGB
+        data = np.array(output)
+        orig_shape = data.shape
+        data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
+        if color.shape[0] < 4 :
+            color = np.hstack(color, 255)
+        data[data[:, 3] <= alphathreshold] = color
+        self.output_canvas.set_zoom_draw_image(
+            Image.fromarray(data.reshape(orig_shape)))
+
 
     #-------------------------------------------------------------------------#
     # GBC-related from below here

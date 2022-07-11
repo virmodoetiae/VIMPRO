@@ -106,6 +106,10 @@ class MouseScrollableImageCanvas(tk.Canvas):
                     event=event)
                 return
         self.scan_mark(event.x, event.y)
+        #print(
+        #    int(self.canvasx(event.x)/self.image_scale), 
+        #    int(self.canvasy(event.y)/self.image_scale)
+        #)
 
     def click_and_drag(self, event):
         if self.selection_tool_b :

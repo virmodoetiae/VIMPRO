@@ -31,7 +31,7 @@ import VIMPRO_Data as vd
 
 from tkinter.filedialog import askdirectory
 
-import time
+import colorsys
 
 ### FUNCTIONS #################################################################
 
@@ -219,7 +219,6 @@ class GUI_GF(tk.Toplevel) :
 
     def on_set_output_folder(self) :
         f = askdirectory()
-        print(f)
         if f != None and f != '':
             self.output_folder = f
             self.run_b.config(state=tk.NORMAL)
@@ -271,7 +270,6 @@ class GUI_GF(tk.Toplevel) :
                 self.g_channel_br_max_e.value)
             bb = randomize(self.b_channel_br_min_e.value, 
                 self.b_channel_br_max_e.value)
-            print(rb, gb, bb)
             # Run
             self.root.image_processor.process(
                 palettesgridsize=(None, None), 
@@ -280,9 +278,30 @@ class GUI_GF(tk.Toplevel) :
                 fidelity=fidelity, 
                 tilesize=(None, None), 
                 outsize=out_size)
+
+            # Apply outline
+            palette = self.root.image_processor.palettes[0]
+            if palette[-1][3] == 0 :
+                palette = np.delete(palette, palette.shape[0]-1, axis=0)
+            avg_color = (np.average(palette, axis=0)).astype(np.uint8)
+            avg_color[3] = 255 # Just to be sure
             if (self.outline) :
+                out_color = (avg_color/2).astype(np.uint8)
+                out_color[3] = 255
+                #print(out_color)
                 self.root.image_processor.apply_shader_outline(
-                    alphathreshold=127)
+                    alphathreshold=127, 
+                    outlinecolor=out_color)
+
+            bkg_color = colorsys.rgb_to_hls(avg_color[0], avg_color[1], 
+                avg_color[2])
+            h = np.random.rand() #bkg_color[0]+(1.0/3.0)
+            #if h > 1 :
+            #    h -= 1
+            bkg_color = colorsys.hls_to_rgb(h, bkg_color[1], bkg_color[2])
+            r, g, b = bkg_color
+            self.root.image_processor.set_background_color(
+                    np.array([r, g, b, 255]))
 
             # Save
             if (not step) :
