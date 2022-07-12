@@ -29,7 +29,7 @@ import VIMPRO_Processor as vp
 import VIMPRO_Tkinter as vk
 import VIMPRO_Data as vd
 
-from tkinter.filedialog import askdirectory
+from tkinter.filedialog import askdirectory, askopenfile
 
 import colorsys
 
@@ -60,8 +60,9 @@ class GUI_GF(tk.Toplevel) :
 
         row_names = ["Palette size range", 
         "R channel bit range", "G channel bit range", "B channel bit range",
-        "Outline",
-        "Step", "Set output folder", "Number of runs", "Run"]
+        "Outline", "Background", "Load alpha mask", "Alpha mask", 
+        "Alpha mask value", "Step", "Set output folder", "Number of runs", 
+        "Run"]
         self.rows = {}
         for i, name in enumerate(row_names) :
             self.rows[name] = i
@@ -188,6 +189,62 @@ class GUI_GF(tk.Toplevel) :
         self.outline_cb.grid(row=row_n, column=1, sticky=tk.W, 
             **self.pad1.get("w"))
 
+        # Background -----------------#
+        row_name = "Background"
+        row_n = self.rows[row_name]
+        self.background = False
+        self.background_l = tk.Label(self.frame, text=row_name, 
+            anchor=tk.W)
+        self.background_l.grid(row=row_n, column=0, sticky=tk.W, 
+            **self.pad1.get("w"))
+        self.background_iv = tk.IntVar()
+        self.background_cb = tk.Checkbutton(self.frame, 
+            variable=self.background_iv, onvalue=1, offvalue=0, 
+            command=self.on_background_check)
+        self.background_cb.grid(row=row_n, column=1, sticky=tk.W, 
+            **self.pad1.get("w"))
+
+        # Load alpha mask ------------#
+        row_name = "Load alpha mask"
+        row_n = self.rows[row_name]
+        self.load_alpha_mask_b = tk.Button(self.frame, text=row_name,
+            command=self.on_load_alpha_mask)
+        self.load_alpha_mask_b.grid(row=row_n, column=0, columnspan=3,
+            sticky=tk.W+tk.E+tk.N, **self.pad1.get("w"))
+        self.alpha_mask_data = None
+        self.alpha_mask_image = None
+
+        # Alpha mask -----------------#
+        row_name = "Alpha mask"
+        row_n = self.rows[row_name]
+        self.alpha_mask = False
+        self.alpha_mask_l = tk.Label(self.frame, text=row_name, 
+            anchor=tk.W)
+        self.alpha_mask_l.grid(row=row_n, column=0, sticky=tk.W, 
+            **self.pad1.get("w"))
+        self.alpha_mask_iv = tk.IntVar()
+        self.alpha_mask_cb = tk.Checkbutton(self.frame, 
+            variable=self.alpha_mask_iv, onvalue=1, offvalue=0, 
+            command=self.on_alpha_mask_check)
+        self.alpha_mask_cb.grid(row=row_n, column=1, sticky=tk.W, 
+            **self.pad1.get("w"))
+        self.alpha_mask_cb.config(state=tk.DISABLED)
+
+        # Alpha mask value -----------#
+        row_name = "Alpha mask value"
+        row_n = self.rows[row_name]
+        self.alpha_mask_value_l = tk.Label(self.frame, text=row_name, 
+            anchor=tk.W)
+        self.alpha_mask_value_l.grid(row=row_n, column=0, sticky=tk.W, 
+            **self.pad1.get("w"))
+        self.alpha_mask_value_e = vk.IntEntry(self.frame, 
+            width=self.entry_width)
+        self.alpha_mask_value_e.set(127)
+        self.alpha_mask_value_e.set_min_value(0)
+        self.alpha_mask_value_e.set_max_value(255)
+        self.alpha_mask_value_e.grid(row=row_n, column=1, columnspan=2,
+            sticky=tk.W+tk.E, **self.pad1.get("c"))
+
         # Output folder --------------#
         row_name = "Set output folder"
         row_n = self.rows[row_name]
@@ -217,6 +274,8 @@ class GUI_GF(tk.Toplevel) :
         # Adjust
         vk.stretch_grid(self.frame)
 
+    # Functions --------------------------------------------------------------#
+
     def on_set_output_folder(self) :
         f = askdirectory()
         if f != None and f != '':
@@ -225,7 +284,24 @@ class GUI_GF(tk.Toplevel) :
 
     def on_outline_check(self) :
         self.outline = bool(self.outline_iv.get())
-        print(self.outline)
+
+    def on_background_check(self) :
+        self.background = bool(self.background_iv.get())
+
+    def on_load_alpha_mask(self) :
+        f = askopenfile(mode="rb", title="Select a mask file to load")
+        if f :
+            self.alpha_mask_image = Image.open(f.name).convert("RGBA")
+            self.alpha_mask_data = None
+            self.alpha_mask_cb.config(state=tk.NORMAL)
+        else :
+            self.alpha_mask_image = None
+            self.alpha_mask_data = None
+            self.alpha_mask_iv.set(0)
+            self.alpha_mask_cb.config(state=tk.DISABLED)
+
+    def on_alpha_mask_check(self) :
+        self.alpha_mask = bool(self.alpha_mask_iv.get())
 
     def on_step(self) :
         self.on_run(step=True)
@@ -279,13 +355,14 @@ class GUI_GF(tk.Toplevel) :
                 tilesize=(None, None), 
                 outsize=out_size)
 
-            # Apply outline
             palette = self.root.image_processor.palettes[0]
             if palette[-1][3] == 0 :
                 palette = np.delete(palette, palette.shape[0]-1, axis=0)
             avg_color = (np.average(palette, axis=0)).astype(np.uint8)
             avg_color[3] = 255 # Just to be sure
-            if (self.outline) :
+            
+            # Apply outline
+            if self.outline :
                 out_color = (avg_color/2).astype(np.uint8)
                 out_color[3] = 255
                 #print(out_color)
@@ -293,15 +370,27 @@ class GUI_GF(tk.Toplevel) :
                     alphathreshold=127, 
                     outlinecolor=out_color)
 
-            bkg_color = colorsys.rgb_to_hls(avg_color[0], avg_color[1], 
-                avg_color[2])
-            h = np.random.rand() #bkg_color[0]+(1.0/3.0)
-            #if h > 1 :
-            #    h -= 1
-            bkg_color = colorsys.hls_to_rgb(h, bkg_color[1], bkg_color[2])
-            r, g, b = bkg_color
-            self.root.image_processor.set_background_color(
-                    np.array([r, g, b, 255]))
+            # Apply background
+            if self.background :
+                bkg_color = colorsys.rgb_to_hsv(avg_color[0], avg_color[1], 
+                    avg_color[2])
+                h = np.random.rand()
+                bkg_color = colorsys.hsv_to_rgb(h, bkg_color[1], bkg_color[2])
+                r, g, b = bkg_color
+                self.root.image_processor.set_background_color(
+                        np.array([r, g, b, 255]))
+
+            # Apply alpha mask
+            if self.alpha_mask and self.alpha_mask_value_e.valid :
+                if self.alpha_mask_data is None :
+                    o = self.root.image_processor.output_canvas.image_no_zoom_PIL_RGB
+                    size = (o.width, o.height)
+                    self.alpha_mask_data = np.array(
+                        self.alpha_mask_image.resize(size, 
+                        resample=Image.LANCZOS))
+                alpha = self.alpha_mask_value_e.value
+                self.root.image_processor.apply_alpha_mask(
+                    self.alpha_mask_data, alpha)
 
             # Save
             if (not step) :

@@ -51,7 +51,7 @@ class KMeans :
         tmp = deepcopy(kwargs["data"])
         alpha_threshold = 191 #127
         transparent = np.where(tmp[:,3] < alpha_threshold)
-        non_transparent = np.where(tmp[:,3] > alpha_threshold)
+        non_transparent = np.where(tmp[:,3] >= alpha_threshold)
         tmp[non_transparent, 3] = 255
         tmp[transparent] = np.array([0,0,0,0])
         tmp = np.delete(tmp, transparent, axis=0)
@@ -466,14 +466,41 @@ class ImageProcessor :
     def set_background_color(self, color, alphathreshold=127) :
         output = self.output_canvas.image_no_zoom_PIL_RGB
         data = np.array(output)
-        orig_shape = data.shape
-        data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
+        shape = data.shape
+        data = data.reshape(shape[0]*shape[1], shape[2])
         if color.shape[0] < 4 :
             color = np.hstack(color, 255)
         data[data[:, 3] <= alphathreshold] = color
         self.output_canvas.set_zoom_draw_image(
-            Image.fromarray(data.reshape(orig_shape)))
+            Image.fromarray(data.reshape(shape)))
 
+    def apply_alpha_mask(self, mask, alpha) :
+        shape = mask.shape
+        mask = mask.reshape((shape[0]*shape[1], shape[2]))
+        data = np.array(self.output_canvas.image_no_zoom_PIL_RGB).reshape(
+            shape[0]*shape[1], shape[2])
+        data[np.where(mask[:,3] >= 127), 3] = alpha
+        self.output_canvas.set_zoom_draw_image(Image.fromarray(data.reshape(
+            shape)))
+        
+        '''
+        shape = mask.shape
+        mask = np.reshape(mask, (shape[0]*shape[1], shape[2]))
+        cnd = np.where(mask[3] > 127)
+        print(cnd)
+        print()
+        print(mask[cnd])
+        #mask[cnd, 3] = 0
+        #mask[np.logical_not(cnd), 3] = alpha
+        #mask = np.reshape(mask, shape)
+        print(mask)
+        #mask[cnd] = 0
+        #mask[not cnd] = alpha
+        #print(mask)
+        #data = np.array(self.output_canvas.image_no_zoom_PIL_RGB)
+        #print(mask, alpha)
+        pass
+        '''
 
     #-------------------------------------------------------------------------#
     # GBC-related from below here
