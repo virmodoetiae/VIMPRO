@@ -384,11 +384,26 @@ class GUI_GF(tk.Toplevel) :
 
             # Apply background
             if self.background :
-                bkg_color = colorsys.rgb_to_hsv(avg_color[0], avg_color[1], 
-                    avg_color[2])
-                h = np.random.rand()
-                bkg_color = colorsys.hsv_to_rgb(h, bkg_color[1], bkg_color[2])
-                r, g, b = bkg_color
+                c = avg_color
+                c = colorsys.rgb_to_hls(c[0]/255.0, c[1]/255.0, 
+                    c[2]/255.0)
+                h = c[0]+np.random.normal(scale=0.25)
+                if h < 0 :
+                    h = 1 - (h%1)
+                else :
+                    h %= 1
+                l = 0.8+np.random.normal(scale=0.05)
+                if l < 0 :
+                    l = 1 - (l%1)
+                else :
+                    l %= 1
+                s = c[2]+np.random.normal(scale=0.1)
+                if s < 0 :
+                    s = 1 - (s%1)
+                else :
+                    s %= 1
+                c = colorsys.hls_to_rgb(h, l, s)
+                r, g, b = (int(255*i) for i in c)
                 self.root.image_processor.set_background_color(
                         np.array([r, g, b, 255]))
 
