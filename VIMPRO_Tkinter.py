@@ -23,6 +23,8 @@ from tkinter import ttk
 from PIL import Image, ImageOps, ImageTk
 from tkinter.filedialog import askopenfile, asksaveasfile
 
+from sklearn.utils import resample
+
 import VIMPRO_Data as vd
 
 ### FUNCTIONS #################################################################

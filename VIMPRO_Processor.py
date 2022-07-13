@@ -36,6 +36,7 @@ import colorsys as cs
 
 ### CONSTANTS #################################################################
 
+ALPHA_THRESHOLD = 128+32-1
 DEFAULT_PROC_MODE = "Default"
 TILED_PROC_MODE = "Tiled"
 
@@ -49,9 +50,8 @@ class KMeans :
         # as a single color (0,0,0,0) to the means if any transparency was
         # present to begin with
         tmp = deepcopy(kwargs["data"])
-        alpha_threshold = 191 #127
-        transparent = np.where(tmp[:,3] < alpha_threshold)
-        non_transparent = np.where(tmp[:,3] >= alpha_threshold)
+        transparent = np.where(tmp[:,3] <= ALPHA_THRESHOLD)
+        non_transparent = np.where(tmp[:,3] > ALPHA_THRESHOLD)
         tmp[non_transparent, 3] = 255
         tmp[transparent] = np.array([0,0,0,0])
         tmp = np.delete(tmp, transparent, axis=0)
@@ -61,7 +61,7 @@ class KMeans :
 
         self.data, self.data_freq = np.unique(tmp, axis=0, 
             return_counts=True)
-        
+
         self.n = self.data.shape[0]
         self.d = self.data.shape[1]
         self.k = kwargs["k"]
@@ -75,7 +75,10 @@ class KMeans :
         
         self.print_info = kwargs.get("printinfo", False)
         
-        self.run()
+        if self.n > 0 :
+            self.run()
+        else :
+            self.means = (np.random.rand(self.k, 4)*255).astype(np.uint8)
 
     def force_means_size(self) :
         # Force size of k on self.means
@@ -115,8 +118,8 @@ class KMeans :
 
         self.force_means_size()
 
-        if self.has_transparency :
-            self.means = np.vstack([self.means, np.array([0,0,0,0])])
+        #if self.has_transparency :
+           #self.means = np.vstack([self.means, np.array([0,0,0,0])])
 
         if self.print_info :
             print("Final k-means performance (iters/res):", i,
@@ -285,7 +288,7 @@ class ImageProcessor :
         scale = np.sqrt(max_pixels/n_pixels)
         kmeans_image = self.crop(kmeans_image, aspect_ratio)
         kmeans_image = kmeans_image.resize((int(out_x*min(scale, 1.0)), 
-            int(out_y*min(1.0, scale))), resample=Image.NEAREST)
+            int(out_y*min(1.0, scale))), resample=Image.BILINEAR)
         data = np.array(kmeans_image)
         data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
         k_means = KMeans(data=data, k=palette_size, fidelity=fidelity, 
@@ -294,17 +297,28 @@ class ImageProcessor :
         # Prepare output image (cropping and such)
         output_image = self.input_canvas.image_no_zoom_PIL_RGB.copy()
         output_image = self.crop(output_image, aspect_ratio)
-        output_image = output_image.resize((out_x, out_y))
+        output_image = output_image.resize((out_x, out_y), 
+            resample=Image.BILINEAR)
+        
+        # Prepare transparency mask
+        oid = np.array(output_image)
+        ois = oid.shape
+        oid = oid.reshape((ois[0]*ois[1], ois[2]))
+        mask = np.zeros((oid.shape[0], 1))
+        non_transparent = np.where(oid[:,3] > ALPHA_THRESHOLD)
+        mask[non_transparent] = 1
 
         # Convert color palette into 8 bit
         k_means.means = self.convert_color_bits(k_means.means, 
             rgb_bits)
 
-        # Replace colors in output with colors in palette
+        # Replace colors in output with colors in palette and apply 
+        # transparency mask
         data = np.array(output_image)
         orig_shape = data.shape
         data = data.reshape(data.shape[0]*data.shape[1], data.shape[2])
         self.replace_from_palette(data, k_means.means)
+        data = (data*mask).astype(np.uint8)
         data = data.reshape(orig_shape)
         
         # Convert back to image and draw to canvas
@@ -344,12 +358,20 @@ class ImageProcessor :
         input_image = self.input_canvas.image_no_zoom_PIL_RGB.copy()
         input_image = self.crop(input_image, aspect_ratio)
         output_image = input_image.copy()
-        output_image = output_image.resize((out_x, out_y))
-        output_data = np.array(output_image)
+        output_image = output_image.resize((out_x, out_y), 
+            resample=Image.BILINEAR)
+        # Prepare transparency mask
+        oid = np.array(output_image)
+        ois = oid.shape
+        oid = oid.reshape((ois[0]*ois[1], ois[2]))
+        mask = np.zeros((oid.shape[0], 1))
+        non_transparent = np.where(oid[:,3] > ALPHA_THRESHOLD)
+        mask[non_transparent] = 1
+        mask = mask.reshape((ois[0], ois[1], 1))
         n_pixels = out_x*out_y
         scale = np.sqrt(max_pixels*n_palettes/n_pixels)
         input_image = input_image.resize((int(out_x*min(scale, 1.0)), 
-            int(out_y*min(1.0, scale))), resample=Image.LANCZOS)
+            int(out_y*min(1.0, scale))), resample=Image.BILINEAR)
         data = np.array(input_image)
 
         # Determine palettes
@@ -405,7 +427,7 @@ class ImageProcessor :
                 if (n_pixels > max_tile_pixels) :
                     scale = np.sqrt(max_tile_pixels/n_pixels)
                     proc_tile = proc_tile.resize((int(tile.width*scale), 
-                        int(tile.height*scale)), resample=Image.LANCZOS)
+                        int(tile.height*scale)), resample=Image.BILINEAR)
                 data = np.array(proc_tile)
                 best_palette = self.best_palette_avg_norm(
                     data.reshape(data.shape[0]*data.shape[1], data.shape[2]),
@@ -423,7 +445,7 @@ class ImageProcessor :
         #print("Dt substitution =", (time.perf_counter()-start_time))
 
         # Convert back to image and draw to canvas
-        output_image = Image.fromarray(out.astype(np.uint8))
+        output_image = Image.fromarray((out*mask).astype(np.uint8))
         self.output_canvas.set_zoom_draw_image(output_image)
 
     def process(self, **kwargs) :
@@ -463,7 +485,7 @@ class ImageProcessor :
         self.output_canvas.set_zoom_draw_image(
             vs.OutlineShader(output, **kwargs).apply())
 
-    def set_background_color(self, color, alphathreshold=127) :
+    def set_background_color(self, color, alphathreshold=ALPHA_THRESHOLD) :
         output = self.output_canvas.image_no_zoom_PIL_RGB
         data = np.array(output)
         shape = data.shape
@@ -479,28 +501,9 @@ class ImageProcessor :
         mask = mask.reshape((shape[0]*shape[1], shape[2]))
         data = np.array(self.output_canvas.image_no_zoom_PIL_RGB).reshape(
             shape[0]*shape[1], shape[2])
-        data[np.where(mask[:,3] >= 127), 3] = alpha
+        data[np.where(mask[:,3] > ALPHA_THRESHOLD), 3] = alpha
         self.output_canvas.set_zoom_draw_image(Image.fromarray(data.reshape(
             shape)))
-        
-        '''
-        shape = mask.shape
-        mask = np.reshape(mask, (shape[0]*shape[1], shape[2]))
-        cnd = np.where(mask[3] > 127)
-        print(cnd)
-        print()
-        print(mask[cnd])
-        #mask[cnd, 3] = 0
-        #mask[np.logical_not(cnd), 3] = alpha
-        #mask = np.reshape(mask, shape)
-        print(mask)
-        #mask[cnd] = 0
-        #mask[not cnd] = alpha
-        #print(mask)
-        #data = np.array(self.output_canvas.image_no_zoom_PIL_RGB)
-        #print(mask, alpha)
-        pass
-        '''
 
     #-------------------------------------------------------------------------#
     # GBC-related from below here

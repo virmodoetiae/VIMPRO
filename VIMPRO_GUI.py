@@ -811,9 +811,9 @@ class GUI(tk.Tk) :
                 self.out_res_le.set((160, 144))
                 self.out_res_le.disable()
             
-            self.open_gf_view_b.configure(state=tk.DISABLED)
-            if self.open_gf_view_b.toggled :
-                self.on_open_gf_view()
+            #self.open_gf_view_b.configure(state=tk.DISABLED)
+            #if self.open_gf_view_b.toggled :
+            #    self.on_open_gf_view()
 
     def on_comp_mode(self, *args, **kwargs) :
         comp_mode = self.comp_mode_sv.get()
@@ -955,7 +955,7 @@ class GUI(tk.Tk) :
     # From here on, the ordering is alphabetical
 
     def process_image(self) :
-        proc_mode =self.proc_mode_sv.get()
+        proc_mode = self.proc_mode_sv.get()
 
         # Check input data validity
         if (not self.input_canvas.image_id or 

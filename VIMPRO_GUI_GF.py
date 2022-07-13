@@ -274,6 +274,9 @@ class GUI_GF(tk.Toplevel) :
         # Adjust
         vk.stretch_grid(self.frame)
 
+        #
+        self.out_res = None
+
     # Functions --------------------------------------------------------------#
 
     def on_set_output_folder(self) :
@@ -332,12 +335,21 @@ class GUI_GF(tk.Toplevel) :
         nr = 1
         if (not step) :
             nr = self.n_runs_e.value
-        for i in range(nr) : 
-            # Values from master
-            fidelity = self.root.fidelity_e.get()
+        # Values from master
+        proc_mode = self.root.proc_mode_sv.get()
+        fidelity = self.root.fidelity_e.get()
+        if proc_mode == vp.TILED_PROC_MODE :
+            out_size = (self.root.tiles_grid_le.x_e.value, 
+                self.root.tiles_grid_le.y_e.value)
+        else :
             out_size = (self.root.out_res_le.x_e.value, 
                 self.root.out_res_le.y_e.value)
-            # Values from here
+        tile_size = (self.root.tile_size_e_x.value, 
+            self.root.tile_size_e_y.value)
+        palettes_grid_size = (self.root.palettes_grid_x_e.value, 
+            self.root.palettes_grid_y_e.value)
+        for i in range(nr) : 
+            # Values from here (randomized in loop)
             ps = randomize(self.palettes_sr_min_e.value,
                 self.palettes_sr_max_e.value)
             rb = randomize(self.r_channel_br_min_e.value, 
@@ -348,11 +360,11 @@ class GUI_GF(tk.Toplevel) :
                 self.b_channel_br_max_e.value)
             # Run
             self.root.image_processor.process(
-                palettesgridsize=(None, None), 
+                palettesgridsize=palettes_grid_size, 
                 palettesize=ps, 
                 rgbbits=(rb,gb,bb), 
                 fidelity=fidelity, 
-                tilesize=(None, None), 
+                tilesize=tile_size, 
                 outsize=out_size)
 
             palette = self.root.image_processor.palettes[0]
@@ -363,7 +375,7 @@ class GUI_GF(tk.Toplevel) :
             
             # Apply outline
             if self.outline :
-                out_color = (avg_color/2).astype(np.uint8)
+                out_color = (avg_color/3).astype(np.uint8)
                 out_color[3] = 255
                 #print(out_color)
                 self.root.image_processor.apply_shader_outline(
@@ -382,12 +394,15 @@ class GUI_GF(tk.Toplevel) :
 
             # Apply alpha mask
             if self.alpha_mask and self.alpha_mask_value_e.valid :
-                if self.alpha_mask_data is None :
-                    o = self.root.image_processor.output_canvas.image_no_zoom_PIL_RGB
-                    size = (o.width, o.height)
+                o = self.root.image_processor.output_canvas.image_no_zoom_PIL_RGB
+                size = (o.width, o.height)
+                if (self.alpha_mask_data is None or \
+                    self.out_res != size) and \
+                    self.alpha_mask_image is not None:
+                    self.out_res = size
                     self.alpha_mask_data = np.array(
-                        self.alpha_mask_image.resize(size, 
-                        resample=Image.LANCZOS))
+                        self.alpha_mask_image.resize(self.out_res, 
+                        resample=Image.NEAREST))
                 alpha = self.alpha_mask_value_e.value
                 self.root.image_processor.apply_alpha_mask(
                     self.alpha_mask_data, alpha)
